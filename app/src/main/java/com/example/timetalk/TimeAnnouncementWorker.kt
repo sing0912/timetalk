@@ -2,13 +2,17 @@ package com.example.timetalk
 
 import android.content.Context
 import android.speech.tts.TextToSpeech
+import android.speech.tts.TextToSpeech.OnUtteranceProgressListener
 import android.util.Log
-import androidx.work.Worker
+import androidx.work.CoroutineWorker
+import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
-import java.text.SimpleDateFormat
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import java.util.*
 import kotlin.coroutines.resume
-import kotlin.coroutines.suspendCoroutine
 
 /**
  * 백그라운드에서 시간을 음성으로 알려주는 Worker 클래스
@@ -20,10 +24,10 @@ import kotlin.coroutines.suspendCoroutine
 class TimeAnnouncementWorker(
     private val context: Context,
     params: WorkerParameters
-) : Worker(context, params) {
+) : CoroutineWorker(context, params) {
 
-    private var textToSpeech: TextToSpeech? = null
     private val TAG = "TimeAnnouncementWorker"
+    private var tts: TextToSpeech? = null
 
     /**
      * Worker가 실행될 때 호출되는 메소드
@@ -31,51 +35,124 @@ class TimeAnnouncementWorker(
      * 
      * @return Result 작업 실행 결과 (성공/실패/재시도)
      */
-    override fun doWork(): Result {
-        Log.d(TAG, "doWork: 시간 알림 작업 시작")
+    override suspend fun doWork(): Result = withContext(Dispatchers.Main) {
+        Log.d(TAG, "Starting time announcement work")
         
         try {
-            announceTime()
-            Log.d(TAG, "doWork: 시간 알림 작업 성공")
-            return Result.success()
-        } catch (e: Exception) {
-            Log.e(TAG, "doWork: 시간 알림 작업 실패", e)
-            return Result.failure()
-        }
-    }
-
-    /**
-     * 현재 시간을 음성으로 알려주는 메소드
-     * "HH시 mm분" 형식으로 시간을 포맷팅하여 음성으로 변환
-     */
-    private fun announceTime() {
-        Log.d(TAG, "announceTime: TTS 초기화 시작")
-        
-        // TTS 초기화 및 시간 알림
-        textToSpeech = TextToSpeech(context) { status ->
-            if (status == TextToSpeech.SUCCESS) {
-                Log.d(TAG, "TTS 초기화 성공")
-                textToSpeech?.language = Locale.KOREAN
-
-                // 현재 시간 가져오기
-                val calendar = Calendar.getInstance()
-                val timeFormat = SimpleDateFormat("HH시 mm분", Locale.KOREAN)
-                val timeString = timeFormat.format(calendar.time)
-                Log.d(TAG, "현재 시간: $timeString")
-
-                // 음성 출력
-                textToSpeech?.speak(timeString, TextToSpeech.QUEUE_FLUSH, null, "TimeAnnouncement")
-                
-                // TTS가 말하기를 완료할 때까지 대기
-                Thread.sleep(3000)
-                
-                // TTS 자원 해제
-                textToSpeech?.stop()
-                textToSpeech?.shutdown()
-                Log.d(TAG, "TTS 자원 해제 완료")
-            } else {
-                Log.e(TAG, "TTS 초기화 실패: $status")
+            // Set foreground service notification
+            setForeground(createForegroundInfo())
+            
+            // Initialize TTS
+            tts = await { callback ->
+                TextToSpeech(context) { status ->
+                    if (status == TextToSpeech.SUCCESS) {
+                        val result = tts?.setLanguage(Locale.KOREAN)
+                        if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+                            Log.e(TAG, "Korean language is not supported")
+                            callback(false)
+                        } else {
+                            Log.d(TAG, "TTS initialized successfully")
+                            callback(true)
+                        }
+                    } else {
+                        Log.e(TAG, "TTS initialization failed with status: $status")
+                        callback(false)
+                    }
+                }
             }
+
+            if (tts == null) {
+                Log.e(TAG, "Failed to initialize TTS")
+                return@withContext Result.failure()
+            }
+
+            // Get current time
+            val calendar = Calendar.getInstance()
+            val hour = calendar.get(Calendar.HOUR_OF_DAY)
+            val minute = calendar.get(Calendar.MINUTE)
+            val timeString = String.format("현재 시각은 %d시 %d분 입니다.", hour, minute)
+            Log.d(TAG, "Announcing time: $timeString")
+
+            // Speak the time
+            val result = speakText(timeString)
+            if (!result) {
+                Log.e(TAG, "Failed to speak time announcement")
+                return@withContext Result.failure()
+            }
+
+            Log.d(TAG, "Time announcement completed successfully")
+            Result.success()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in time announcement work", e)
+            Result.failure()
+        } finally {
+            tts?.stop()
+            tts?.shutdown()
+            tts = null
         }
     }
+
+    private suspend fun speakText(text: String): Boolean = suspendCancellableCoroutine { continuation ->
+        try {
+            tts?.setOnUtteranceProgressListener(object : OnUtteranceProgressListener() {
+                override fun onStart(utteranceId: String) {
+                    Log.d(TAG, "Started speaking: $utteranceId")
+                }
+
+                override fun onDone(utteranceId: String) {
+                    Log.d(TAG, "Finished speaking: $utteranceId")
+                    continuation.resume(true)
+                }
+
+                override fun onError(utteranceId: String) {
+                    Log.e(TAG, "Error speaking: $utteranceId")
+                    continuation.resume(false)
+                }
+
+                @Deprecated("Deprecated in Java")
+                override fun onError(utteranceId: String, errorCode: Int) {
+                    Log.e(TAG, "Error speaking: $utteranceId, error code: $errorCode")
+                    continuation.resume(false)
+                }
+            })
+
+            val params = HashMap<String, String>()
+            params[TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID] = "timeAnnouncement"
+            
+            tts?.speak(text, TextToSpeech.QUEUE_FLUSH, params)
+            
+            // Add a safety delay
+            delay(3000)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in speakText", e)
+            continuation.resume(false)
+        }
+    }
+
+    private suspend fun await(init: (callback: (Boolean) -> Unit) -> Unit): TextToSpeech? = suspendCancellableCoroutine { continuation ->
+        try {
+            init { success ->
+                if (success) {
+                    continuation.resume(tts)
+                } else {
+                    continuation.resume(null)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in TTS initialization", e)
+            continuation.resume(null)
+        }
+    }
+
+    private fun createForegroundInfo(): ForegroundInfo {
+        val notification = androidx.core.app.NotificationCompat.Builder(context, "time_announcement")
+            .setContentTitle("시간 알림")
+            .setContentText("시간 알림이 실행 중입니다.")
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_LOW)
+            .build()
+
+        return ForegroundInfo(1, notification)
+    }
+} 
 } 

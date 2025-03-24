@@ -1,7 +1,6 @@
 package com.example.timetalk
 
 import android.Manifest
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
@@ -12,6 +11,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.work.*
+import java.util.*
 import java.util.concurrent.TimeUnit
 
 /**
@@ -20,7 +20,8 @@ import java.util.concurrent.TimeUnit
  */
 class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     // TextToSpeech 객체: 텍스트를 음성으로 변환하는 기능을 제공
-    private lateinit var textToSpeech: TextToSpeech
+    private lateinit var tts: TextToSpeech
+    private var isTtsReady = false
     // UI 컴포넌트: 시간 알림 시작 버튼
     private lateinit var startButton: Button
     // UI 컴포넌트: 시간 알림 중지 버튼
@@ -36,32 +37,30 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
      */
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        Log.d(TAG, "onCreate: 액티비티 생성")
+        Log.d(TAG, "onCreate called")
         
         // activity_main.xml 레이아웃을 현재 액티비티에 설정
         setContentView(R.layout.activity_main)
 
-        // TextToSpeech 초기화
-        textToSpeech = TextToSpeech(this, this)
-        Log.d(TAG, "TextToSpeech 초기화")
+        // Initialize TTS
+        tts = TextToSpeech(this, this)
         
+        // Request necessary permissions
+        checkPermissions()
+
         // 레이아웃에서 버튼 컴포넌트 찾기
         startButton = findViewById(R.id.startButton)
         stopButton = findViewById(R.id.stopButton)
 
         // 시작 버튼 클릭 이벤트 처리
         startButton.setOnClickListener {
-            Log.d(TAG, "시작 버튼 클릭")
-            if (checkPermissions()) {
-                startTimeAnnouncement()
-            } else {
-                requestPermissions()
-            }
+            Log.d(TAG, "Start button clicked")
+            startTimeAnnouncement()
         }
 
         // 중지 버튼 클릭 이벤트 처리
         stopButton.setOnClickListener {
-            Log.d(TAG, "중지 버튼 클릭")
+            Log.d(TAG, "Stop button clicked")
             stopTimeAnnouncement()
         }
     }
@@ -71,72 +70,73 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
      * 
      * @return Boolean 권한이 부여된 경우 true, 그렇지 않은 경우 false
      */
-    private fun checkPermissions(): Boolean {
-        val isGranted = ContextCompat.checkSelfPermission(
-            this,
-            Manifest.permission.POST_NOTIFICATIONS
-        ) == PackageManager.PERMISSION_GRANTED
-        
-        Log.d(TAG, "권한 확인: $isGranted")
-        return isGranted
-    }
-
-    /**
-     * 알림 권한을 요청하는 메소드
-     * 사용자에게 권한 요청 다이얼로그를 표시
-     */
-    private fun requestPermissions() {
-        Log.d(TAG, "권한 요청")
-        ActivityCompat.requestPermissions(
-            this,
-            arrayOf(Manifest.permission.POST_NOTIFICATIONS),
-            PERMISSION_REQUEST_CODE
-        )
+    private fun checkPermissions() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+            != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                1
+            )
+        }
     }
 
     /**
      * 시간 알림을 시작하는 메소드
-     * WorkManager를 사용하여 15분마다 실행되는 백그라운드 작업을 스케줄링
+     * WorkManager를 사용하여 1분마다 실행되는 백그라운드 작업을 스케줄링
      */
     private fun startTimeAnnouncement() {
-        Log.d(TAG, "시간 알림 시작")
+        Log.d(TAG, "Starting time announcement service")
         
-        // 작업 제약 조건 설정
-        val constraints = Constraints.Builder()
-            .setRequiredNetworkType(NetworkType.NOT_REQUIRED)
-            .build()
-
-        // 15분마다 실행되는 주기적 작업 생성
-        val timeAnnouncementWork = PeriodicWorkRequestBuilder<TimeAnnouncementWorker>(
-            15, TimeUnit.MINUTES,  // 반복 주기
-            5, TimeUnit.MINUTES    // 유연성 간격
-        )
-            .setConstraints(constraints)
-            .setInitialDelay(1, TimeUnit.MINUTES)  // 첫 실행 1분 후로 설정
-            .build()
-
-        // WorkManager를 통해 작업 스케줄링
-        WorkManager.getInstance(this).also { workManager ->
-            // 기존 작업 취소
-            workManager.cancelUniqueWork("time_announcement")
-            
-            // 새 작업 등록
-            workManager.enqueueUniquePeriodicWork(
-                "time_announcement",
-                ExistingPeriodicWorkPolicy.UPDATE,
-                timeAnnouncementWork
-            )
-            
-            // 작업 상태 관찰
-            workManager.getWorkInfosForUniqueWorkLiveData("time_announcement")
-                .observe(this) { workInfos ->
-                    workInfos?.forEach { workInfo ->
-                        Log.d(TAG, "작업 상태: ${workInfo.state}")
-                    }
-                }
+        // Test immediate announcement
+        if (isTtsReady) {
+            val currentTime = Calendar.getInstance()
+            val hour = currentTime.get(Calendar.HOUR_OF_DAY)
+            val minute = currentTime.get(Calendar.MINUTE)
+            val timeString = String.format("현재 시각은 %d시 %d분 입니다.", hour, minute)
+            tts.speak(timeString, TextToSpeech.QUEUE_FLUSH, null, "initial_announcement")
+            Log.d(TAG, "Initial announcement: $timeString")
         }
 
-        // 시작 메시지 표시
+        // Set up WorkManager for periodic announcements
+        val constraints = Constraints.Builder()
+            .setRequiresBatteryNotLow(true)
+            .build()
+
+        val periodicWorkRequest = PeriodicWorkRequestBuilder<TimeAnnouncementWorker>(
+            1, TimeUnit.MINUTES,  // Repeat every 1 minute
+            30, TimeUnit.SECONDS  // Flex interval of 30 seconds
+        )
+            .setConstraints(constraints)
+            .addTag("time_announcement")
+            .build()
+
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            "time_announcement",
+            ExistingPeriodicWorkPolicy.UPDATE,
+            periodicWorkRequest
+        )
+
+        // Monitor work status
+        WorkManager.getInstance(this)
+            .getWorkInfosByTagLiveData("time_announcement")
+            .observe(this) { workInfoList ->
+                workInfoList?.forEach { workInfo ->
+                    Log.d(TAG, "Work status: ${workInfo.state}")
+                    when (workInfo.state) {
+                        WorkInfo.State.SUCCEEDED -> {
+                            Log.d(TAG, "Work completed successfully")
+                        }
+                        WorkInfo.State.FAILED -> {
+                            Log.e(TAG, "Work failed")
+                        }
+                        else -> {
+                            Log.d(TAG, "Work state: ${workInfo.state}")
+                        }
+                    }
+                }
+            }
+
         Toast.makeText(this, "시간 알림이 시작되었습니다.", Toast.LENGTH_SHORT).show()
     }
 
@@ -145,7 +145,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
      * WorkManager를 통해 스케줄링된 작업을 취소
      */
     private fun stopTimeAnnouncement() {
-        Log.d(TAG, "시간 알림 중지")
+        Log.d(TAG, "Stopping time announcement service")
         WorkManager.getInstance(this).cancelUniqueWork("time_announcement")
         Toast.makeText(this, "시간 알림이 중지되었습니다.", Toast.LENGTH_SHORT).show()
     }
@@ -157,11 +157,17 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
      */
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
-            Log.d(TAG, "TTS 초기화 성공")
-            textToSpeech.language = java.util.Locale.KOREAN
+            val result = tts.setLanguage(Locale.KOREAN)
+            if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+                Log.e(TAG, "Korean language is not supported")
+                Toast.makeText(this, "한국어가 지원되지 않습니다.", Toast.LENGTH_SHORT).show()
+            } else {
+                isTtsReady = true
+                Log.d(TAG, "TTS initialized successfully")
+            }
         } else {
-            Log.e(TAG, "TTS 초기화 실패: $status")
-            Toast.makeText(this, "TTS 초기화 실패", Toast.LENGTH_SHORT).show()
+            Log.e(TAG, "TTS initialization failed")
+            Toast.makeText(this, "TTS 초기화에 실패했습니다.", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -170,13 +176,11 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
      * TextToSpeech 리소스 해제
      */
     override fun onDestroy() {
+        Log.d(TAG, "onDestroy called")
+        if (::tts.isInitialized) {
+            tts.stop()
+            tts.shutdown()
+        }
         super.onDestroy()
-        Log.d(TAG, "onDestroy: 액티비티 소멸")
-        textToSpeech.shutdown()
-    }
-
-    companion object {
-        // 권한 요청 시 사용할 요청 코드
-        private const val PERMISSION_REQUEST_CODE = 123
     }
 } 
