@@ -2,7 +2,7 @@ package com.example.timetalk
 
 import android.content.Context
 import android.speech.tts.TextToSpeech
-import android.speech.tts.TextToSpeech.OnUtteranceProgressListener
+import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
@@ -94,7 +94,7 @@ class TimeAnnouncementWorker(
 
     private suspend fun speakText(text: String): Boolean = suspendCancellableCoroutine { continuation ->
         try {
-            tts?.setOnUtteranceProgressListener(object : OnUtteranceProgressListener() {
+            tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(utteranceId: String) {
                     Log.d(TAG, "Started speaking: $utteranceId")
                 }
@@ -154,5 +154,4 @@ class TimeAnnouncementWorker(
 
         return ForegroundInfo(1, notification)
     }
-} 
 } 
