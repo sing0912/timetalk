@@ -93,8 +93,8 @@ class TimeAnnouncementWorker(
     }
 
     private suspend fun speakText(text: String): Boolean = withContext(Dispatchers.Main) {
-        suspendCancellableCoroutine { continuation ->
-            try {
+        try {
+            suspendCancellableCoroutine { continuation ->
                 tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                     override fun onStart(utteranceId: String) {
                         Log.d(TAG, "Started speaking: $utteranceId")
@@ -121,13 +121,10 @@ class TimeAnnouncementWorker(
                 params[TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID] = "timeAnnouncement"
                 
                 tts?.speak(text, TextToSpeech.QUEUE_FLUSH, params)
-                
-                // Wait for TTS to complete
-                delay(3000)
-            } catch (e: Exception) {
-                Log.e(TAG, "Error in speakText", e)
-                continuation.resume(false)
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in speakText", e)
+            false
         }
     }
 
