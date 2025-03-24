@@ -92,40 +92,42 @@ class TimeAnnouncementWorker(
         }
     }
 
-    private suspend fun speakText(text: String): Boolean = suspendCancellableCoroutine { continuation ->
-        try {
-            tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                override fun onStart(utteranceId: String) {
-                    Log.d(TAG, "Started speaking: $utteranceId")
-                }
+    private suspend fun speakText(text: String): Boolean = withContext(Dispatchers.Main) {
+        suspendCancellableCoroutine { continuation ->
+            try {
+                tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                    override fun onStart(utteranceId: String) {
+                        Log.d(TAG, "Started speaking: $utteranceId")
+                    }
 
-                override fun onDone(utteranceId: String) {
-                    Log.d(TAG, "Finished speaking: $utteranceId")
-                    continuation.resume(true)
-                }
+                    override fun onDone(utteranceId: String) {
+                        Log.d(TAG, "Finished speaking: $utteranceId")
+                        continuation.resume(true)
+                    }
 
-                override fun onError(utteranceId: String) {
-                    Log.e(TAG, "Error speaking: $utteranceId")
-                    continuation.resume(false)
-                }
+                    override fun onError(utteranceId: String) {
+                        Log.e(TAG, "Error speaking: $utteranceId")
+                        continuation.resume(false)
+                    }
 
-                @Deprecated("Deprecated in Java")
-                override fun onError(utteranceId: String, errorCode: Int) {
-                    Log.e(TAG, "Error speaking: $utteranceId, error code: $errorCode")
-                    continuation.resume(false)
-                }
-            })
+                    @Deprecated("Deprecated in Java")
+                    override fun onError(utteranceId: String, errorCode: Int) {
+                        Log.e(TAG, "Error speaking: $utteranceId, error code: $errorCode")
+                        continuation.resume(false)
+                    }
+                })
 
-            val params = HashMap<String, String>()
-            params[TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID] = "timeAnnouncement"
-            
-            tts?.speak(text, TextToSpeech.QUEUE_FLUSH, params)
-            
-            // Add a safety delay
-            delay(3000)
-        } catch (e: Exception) {
-            Log.e(TAG, "Error in speakText", e)
-            continuation.resume(false)
+                val params = HashMap<String, String>()
+                params[TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID] = "timeAnnouncement"
+                
+                tts?.speak(text, TextToSpeech.QUEUE_FLUSH, params)
+                
+                // Wait for TTS to complete
+                delay(3000)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error in speakText", e)
+                continuation.resume(false)
+            }
         }
     }
 
