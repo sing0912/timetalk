@@ -1,6 +1,7 @@
 package com.example.timetalk
 
 import android.content.Context
+import android.os.PowerManager
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
@@ -28,6 +29,7 @@ class TimeAnnouncementWorker(
 
     private val TAG = "TimeAnnouncementWorker"
     private var tts: TextToSpeech? = null
+    private var wakeLock: PowerManager.WakeLock? = null
 
     /**
      * Worker가 실행될 때 호출되는 메소드
@@ -37,6 +39,8 @@ class TimeAnnouncementWorker(
      */
     override suspend fun doWork(): Result = withContext(Dispatchers.Main) {
         Log.d(TAG, "Starting time announcement work")
+        
+        acquireWakeLock()
         
         try {
             // Set foreground service notification
@@ -63,7 +67,7 @@ class TimeAnnouncementWorker(
 
             if (tts == null) {
                 Log.e(TAG, "Failed to initialize TTS")
-                return@withContext Result.failure()
+                return@withContext Result.retry()
             }
 
             // Get current time
@@ -77,15 +81,16 @@ class TimeAnnouncementWorker(
             val result = speakText(timeString)
             if (!result) {
                 Log.e(TAG, "Failed to speak time announcement")
-                return@withContext Result.failure()
+                return@withContext Result.retry()
             }
 
             Log.d(TAG, "Time announcement completed successfully")
             Result.success()
         } catch (e: Exception) {
             Log.e(TAG, "Error in time announcement work", e)
-            Result.failure()
+            Result.retry()
         } finally {
+            releaseWakeLock()
             tts?.stop()
             tts?.shutdown()
             tts = null
@@ -148,9 +153,39 @@ class TimeAnnouncementWorker(
             .setContentTitle("시간 알림")
             .setContentText("시간 알림이 실행 중입니다.")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_LOW)
+            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
+            .setCategory(androidx.core.app.NotificationCompat.CATEGORY_SERVICE)
+            .setOngoing(true)
             .build()
 
         return ForegroundInfo(1, notification)
+    }
+
+    private fun acquireWakeLock() {
+        try {
+            val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+            wakeLock = powerManager.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK,
+                "TimeTalk:TimeAnnouncement"
+            ).apply {
+                acquire(10 * 60 * 1000L) // 10 minutes timeout
+            }
+            Log.d(TAG, "WakeLock acquired")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error acquiring WakeLock", e)
+        }
+    }
+
+    private fun releaseWakeLock() {
+        try {
+            wakeLock?.let {
+                if (it.isHeld) {
+                    it.release()
+                    Log.d(TAG, "WakeLock released")
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error releasing WakeLock", e)
+        }
     }
 } 

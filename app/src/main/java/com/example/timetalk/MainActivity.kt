@@ -71,13 +71,18 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
      * @return Boolean 권한이 부여된 경우 true, 그렇지 않은 경우 false
      */
     private fun checkPermissions() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
-            != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(
-                this,
-                arrayOf(Manifest.permission.POST_NOTIFICATIONS),
-                1
-            )
+        val permissions = arrayOf(
+            Manifest.permission.POST_NOTIFICATIONS,
+            Manifest.permission.FOREGROUND_SERVICE,
+            Manifest.permission.WAKE_LOCK
+        )
+        
+        val permissionsToRequest = permissions.filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }.toTypedArray()
+
+        if (permissionsToRequest.isNotEmpty()) {
+            ActivityCompat.requestPermissions(this, permissionsToRequest, 1)
         }
     }
 
@@ -100,7 +105,9 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
         // Set up WorkManager for periodic announcements
         val constraints = Constraints.Builder()
-            .setRequiresBatteryNotLow(true)
+            .setRequiresBatteryNotLow(false)  // Allow running when battery is low
+            .setRequiresCharging(false)       // Allow running when not charging
+            .setRequiresDeviceIdle(false)     // Allow running when device is not idle
             .build()
 
         val periodicWorkRequest = PeriodicWorkRequestBuilder<TimeAnnouncementWorker>(
@@ -109,6 +116,11 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         )
             .setConstraints(constraints)
             .addTag("time_announcement")
+            .setBackoffCriteria(
+                BackoffPolicy.LINEAR,
+                10, TimeUnit.SECONDS
+            )
+            .setInitialDelay(1, TimeUnit.MINUTES)
             .build()
 
         WorkManager.getInstance(this).enqueueUniquePeriodicWork(
