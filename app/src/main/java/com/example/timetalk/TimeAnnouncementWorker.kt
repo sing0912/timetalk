@@ -1,13 +1,14 @@
 package com.example.timetalk
 
 import android.content.Context
+import android.content.Intent
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.os.Bundle
 import android.os.PowerManager
 import android.speech.tts.TextToSpeech
-import android.speech.tts.UtteranceProgressListener
+import android.speech.tts.TextToSpeech.OnUtteranceProgressListener
 import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
@@ -148,7 +149,7 @@ class TimeAnnouncementWorker(
     private suspend fun speakText(text: String): Boolean = withContext(Dispatchers.Main) {
         try {
             suspendCancellableCoroutine { continuation ->
-                tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                tts?.setOnUtteranceProgressListener(object : OnUtteranceProgressListener() {
                     override fun onStart(utteranceId: String) {
                         Log.d(TAG, "★★★★★★★★★★ 음성 재생 시작: $text (ID: $utteranceId) ★★★★★★★★★★")
                     }
@@ -254,12 +255,24 @@ class TimeAnnouncementWorker(
     }
 
     private fun createForegroundInfo(): ForegroundInfo {
+        // 백그라운드 모드 종료를 위한 인텐트 생성
+        val exitIntent = Intent(context, BackgroundControlReceiver::class.java).apply {
+            action = "com.example.timetalk.EXIT_BACKGROUND"
+        }
+        val exitPendingIntent = android.app.PendingIntent.getBroadcast(
+            context,
+            0,
+            exitIntent,
+            android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+        )
+
         val notification = androidx.core.app.NotificationCompat.Builder(context, "time_announcement")
             .setContentTitle("시간 알림")
-            .setContentText("시간 알림이 실행 중입니다.")
+            .setContentText("시간 알림이 실행 중입니다. 현재 시각: ${SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())}")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
             .setCategory(androidx.core.app.NotificationCompat.CATEGORY_SERVICE)
+            .addAction(android.R.drawable.ic_delete, "종료", exitPendingIntent)
             .setOngoing(true)
             .build()
 

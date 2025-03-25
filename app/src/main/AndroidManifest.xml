@@ -45,5 +45,15 @@
             android:name="androidx.work.impl.foreground.SystemForegroundService"
             android:foregroundServiceType="mediaPlayback"
             android:exported="false" />
+
+        <!-- 백그라운드 컨트롤 리시버 등록 -->
+        <receiver
+            android:name=".BackgroundControlReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.example.timetalk.EXIT_BACKGROUND" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest> 

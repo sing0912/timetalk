@@ -67,6 +67,9 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         
         // Request necessary permissions
         checkPermissions()
+        
+        // 알림 채널 생성
+        createNotificationChannel()
 
         // 시작 버튼 클릭 이벤트 처리
         startButton.setOnClickListener {
@@ -89,6 +92,13 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             } else {
                 stopBackgroundMode()
             }
+        }
+        
+        // 백그라운드 모드 종료 인텐트 확인
+        if (intent.getBooleanExtra("EXIT_BACKGROUND", false)) {
+            Log.d(TAG, "★★★★★★★★★★ 백그라운드 모드 종료 인텐트 수신됨 ★★★★★★★★★★")
+            isBackgroundMode = true // 현재 활성화된 것으로 간주하고 종료 처리
+            stopBackgroundMode()
         }
     }
 
@@ -231,7 +241,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                         val currentTime = Calendar.getInstance()
                         val hour = currentTime.get(Calendar.HOUR_OF_DAY)
                         val minute = currentTime.get(Calendar.MINUTE)
-                        val timeString = String.format("현재 시각은 %d시 %d분 입니다. 이후 백그라운드에서도 1분마다 시간을 알려드립니다.", hour, minute)
+                        val timeString = String.format("현재 시각은 %d시 %d분 입니다. 이후 백그라운드에서도 1시간마다 시간을 알려드립니다.", hour, minute)
                         tts.speak(timeString, TextToSpeech.QUEUE_FLUSH, null, "initial_announcement")
                         Log.d(TAG, "★★★ 초기 시간 알림 직접 실행: $timeString ★★★")
                     }
@@ -254,10 +264,9 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                         WorkManager.getInstance(applicationContext).enqueue(oneTimeWorkRequest)
                         Log.d(TAG, "★★★ 15초 후 실행되는 일회성 작업 등록됨 (ID: ${oneTimeWorkRequest.id}) ★★★")
                         
-                        // 1분마다 실행되는 주기적 작업 등록
+                        // 1시간마다 실행되는 주기적 작업 등록
                         val periodicWorkRequest = PeriodicWorkRequestBuilder<TimeAnnouncementWorker>(
-                            15, TimeUnit.MINUTES,  // 최소 15분 간격 (시스템 제한)
-                            5, TimeUnit.MINUTES    // 5분 유연성
+                            1, TimeUnit.HOURS  // 1시간 간격
                         )
                             .setConstraints(constraints)
                             .addTag("background_time_announcement")
@@ -267,7 +276,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                             )
                             .build()
 
-                        // 1분마다 실행되는 주기적 작업 (실제로는 시스템 제한으로 최소 15분)
+                        // 1시간마다 실행되는 주기적 작업
                         WorkManager.getInstance(applicationContext).enqueueUniquePeriodicWork(
                             "background_time_announcement",
                             ExistingPeriodicWorkPolicy.CANCEL_AND_REENQUEUE, // 기존 작업 취소하고 다시 등록
@@ -276,8 +285,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                         
                         Log.d(TAG, "★★★ 주기적 작업 등록 완료 (ID: ${periodicWorkRequest.id}) ★★★")
                         
-                        // 1분 간격으로 실행되는 여러 개의 일회성 작업 등록 (15분 간격을 보완)
-                        scheduleOneTimeWorkers()
+                        // 앞으로 3시간 동안 1시간마다 실행되는 정확한 일회성 작업도 함께 등록
+                        scheduleHourlyWorkers()
                         
                         // 작업 상태 모니터링 (일회성 작업)
                         WorkManager.getInstance(applicationContext)
@@ -312,7 +321,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                         updateStatus("상태: 작업 등록 오류 - ${e.message}")
                     }
                     
-                    Toast.makeText(this@MainActivity, "백그라운드 모드가 시작되었습니다. 15초 후와 이후 1분마다 시간을 알려드립니다.", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this@MainActivity, "백그라운드 모드가 시작되었습니다. 15초 후와 이후 1시간마다 시간을 알려드립니다.", Toast.LENGTH_LONG).show()
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "★★★ 백그라운드 모드 초기화 오류: ${e.message} ★★★", e)
@@ -320,23 +329,23 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }.start()
     }
     
-    private fun scheduleOneTimeWorkers() {
-        // 다음 10분 동안 1분마다 실행될 일회성 작업을 미리 예약
+    private fun scheduleHourlyWorkers() {
+        // 다음 3시간 동안 1시간마다 실행될 일회성 작업을 미리 예약
         val constraints = Constraints.Builder()
             .setRequiresBatteryNotLow(false)
             .setRequiresCharging(false)
             .setRequiresDeviceIdle(false)
             .build()
             
-        for (i in 1..10) {
+        for (i in 1..3) {
             val oneTimeWorkRequest = OneTimeWorkRequestBuilder<TimeAnnouncementWorker>()
                 .setConstraints(constraints)
-                .setInitialDelay(i * 60L, TimeUnit.SECONDS) // 1분, 2분, 3분... 후에 실행
-                .addTag("minute_worker_$i")
+                .setInitialDelay(i * 60L, TimeUnit.MINUTES) // 1시간, 2시간, 3시간 후에 실행
+                .addTag("hourly_worker_$i")
                 .build()
                 
             WorkManager.getInstance(applicationContext).enqueue(oneTimeWorkRequest)
-            Log.d(TAG, "★★★ ${i}분 후 실행될 일회성 작업 예약됨 (ID: ${oneTimeWorkRequest.id}) ★★★")
+            Log.d(TAG, "★★★ ${i}시간 후 실행될 일회성 작업 예약됨 (ID: ${oneTimeWorkRequest.id}) ★★★")
         }
     }
     
@@ -418,5 +427,35 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             Log.d(TAG, "TTS 자원 해제됨")
         }
         super.onDestroy()
+    }
+
+    // 인텐트로부터 액티비티가 다시 시작될 때 호출
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        Log.d(TAG, "onNewIntent 호출됨")
+        
+        // 백그라운드 모드 종료 요청 확인
+        if (intent.getBooleanExtra("EXIT_BACKGROUND", false)) {
+            Log.d(TAG, "★★★★★★★★★★ 백그라운드 모드 종료 인텐트 수신됨 ★★★★★★★★★★")
+            isBackgroundMode = true // 현재 활성화된 것으로 간주하고 종료 처리
+            stopBackgroundMode()
+        }
+    }
+
+    private fun createNotificationChannel() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            val name = "시간 알림"
+            val descriptionText = "시간 알림 서비스를 위한 알림 채널"
+            val importance = android.app.NotificationManager.IMPORTANCE_HIGH
+            val channel = android.app.NotificationChannel("time_announcement", name, importance).apply {
+                description = descriptionText
+            }
+            
+            // 시스템에 알림 채널 등록
+            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+            notificationManager.createNotificationChannel(channel)
+            
+            Log.d(TAG, "알림 채널 생성됨: time_announcement")
+        }
     }
 } 
