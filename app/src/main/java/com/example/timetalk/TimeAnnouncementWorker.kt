@@ -38,7 +38,7 @@ class TimeAnnouncementWorker(
      * @return Result 작업 실행 결과 (성공/실패/재시도)
      */
     override suspend fun doWork(): Result = withContext(Dispatchers.Main) {
-        Log.d(TAG, "Starting time announcement work")
+        Log.d(TAG, "시간 알림 작업 시작")
         
         acquireWakeLock()
         
@@ -52,21 +52,21 @@ class TimeAnnouncementWorker(
                     if (status == TextToSpeech.SUCCESS) {
                         val result = tts?.setLanguage(Locale.KOREAN)
                         if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-                            Log.e(TAG, "Korean language is not supported")
+                            Log.e(TAG, "한국어 TTS가 지원되지 않습니다")
                             callback(false)
                         } else {
-                            Log.d(TAG, "TTS initialized successfully")
+                            Log.d(TAG, "TTS 초기화 성공")
                             callback(true)
                         }
                     } else {
-                        Log.e(TAG, "TTS initialization failed with status: $status")
+                        Log.e(TAG, "TTS 초기화 실패: $status")
                         callback(false)
                     }
                 }
             }
 
             if (tts == null) {
-                Log.e(TAG, "Failed to initialize TTS")
+                Log.e(TAG, "TTS 객체 생성 실패")
                 return@withContext Result.retry()
             }
 
@@ -75,19 +75,19 @@ class TimeAnnouncementWorker(
             val hour = calendar.get(Calendar.HOUR_OF_DAY)
             val minute = calendar.get(Calendar.MINUTE)
             val timeString = String.format("현재 시각은 %d시 %d분 입니다.", hour, minute)
-            Log.d(TAG, "Announcing time: $timeString")
+            Log.d(TAG, "재생할 텍스트: $timeString")
 
             // Speak the time
             val result = speakText(timeString)
             if (!result) {
-                Log.e(TAG, "Failed to speak time announcement")
+                Log.e(TAG, "시간 알림 음성 재생 실패")
                 return@withContext Result.retry()
             }
 
-            Log.d(TAG, "Time announcement completed successfully")
+            Log.d(TAG, "시간 알림 음성 재생 완료")
             Result.success()
         } catch (e: Exception) {
-            Log.e(TAG, "Error in time announcement work", e)
+            Log.e(TAG, "시간 알림 작업 중 오류 발생", e)
             Result.retry()
         } finally {
             releaseWakeLock()
@@ -102,22 +102,22 @@ class TimeAnnouncementWorker(
             suspendCancellableCoroutine { continuation ->
                 tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                     override fun onStart(utteranceId: String) {
-                        Log.d(TAG, "Started speaking: $utteranceId")
+                        Log.d(TAG, "음성 재생 시작: $text")
                     }
 
                     override fun onDone(utteranceId: String) {
-                        Log.d(TAG, "Finished speaking: $utteranceId")
+                        Log.d(TAG, "음성 재생 완료: $text")
                         continuation.resume(true)
                     }
 
                     override fun onError(utteranceId: String) {
-                        Log.e(TAG, "Error speaking: $utteranceId")
+                        Log.e(TAG, "음성 재생 오류 발생: $text")
                         continuation.resume(false)
                     }
 
                     @Deprecated("Deprecated in Java")
                     override fun onError(utteranceId: String, errorCode: Int) {
-                        Log.e(TAG, "Error speaking: $utteranceId, error code: $errorCode")
+                        Log.e(TAG, "음성 재생 오류 발생 (코드: $errorCode): $text")
                         continuation.resume(false)
                     }
                 })
@@ -125,10 +125,11 @@ class TimeAnnouncementWorker(
                 val params = HashMap<String, String>()
                 params[TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID] = "timeAnnouncement"
                 
+                Log.d(TAG, "TTS speak() 호출: $text")
                 tts?.speak(text, TextToSpeech.QUEUE_FLUSH, params)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error in speakText", e)
+            Log.e(TAG, "음성 재생 중 예외 발생: ${e.message}")
             false
         }
     }
