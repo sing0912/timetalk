@@ -179,8 +179,17 @@ class TimeAnnouncementWorker(
                                             .build()
                                     )
                                 } else {
-                                    @Suppress("DEPRECATION")
-                                    tts?.setAudioStreamType(AudioManager.STREAM_MUSIC)
+                                    // 레거시 오디오 스트림 타입 설정 (API 21 미만)
+                                    try {
+                                        val method = TextToSpeech::class.java.getMethod(
+                                            "setAudioStreamType", 
+                                            Int::class.javaPrimitiveType
+                                        )
+                                        method.invoke(tts, AudioManager.STREAM_MUSIC)
+                                        Log.d(TAG, "★★★★★★★★★★ 레거시 오디오 스트림 타입 설정 완료 ★★★★★★★★★★")
+                                    } catch (e: Exception) {
+                                        Log.e(TAG, "★★★★★★★★★★ 레거시 오디오 스트림 타입 설정 실패: ${e.message} ★★★★★★★★★★")
+                                    }
                                 }
                                 
                                 // 음성 속도 및 피치 설정
