@@ -1,6 +1,7 @@
 package com.example.timetalk
 
 import android.content.Context
+import android.os.Bundle
 import android.os.PowerManager
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
@@ -122,11 +123,14 @@ class TimeAnnouncementWorker(
                     }
                 })
 
-                val params = HashMap<String, String>()
-                params[TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID] = "timeAnnouncement"
-                
                 Log.d(TAG, "TTS speak() 호출: $text")
-                tts?.speak(text, TextToSpeech.QUEUE_FLUSH, params)
+                
+                // Use the non-deprecated version of speak
+                val bundle = Bundle()
+                bundle.putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, "timeAnnouncement")
+                
+                @Suppress("DEPRECATION")
+                tts?.speak(text, TextToSpeech.QUEUE_FLUSH, bundle, "timeAnnouncement")
             }
         } catch (e: Exception) {
             Log.e(TAG, "음성 재생 중 예외 발생: ${e.message}")
