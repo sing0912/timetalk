@@ -13,6 +13,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.coroutines.resume
 
@@ -39,15 +40,22 @@ class TimeAnnouncementWorker(
      * @return Result 작업 실행 결과 (성공/실패/재시도)
      */
     override suspend fun doWork(): Result = withContext(Dispatchers.Main) {
-        Log.d(TAG, "시간 알림 작업 시작")
-        
-        acquireWakeLock()
+        val currentTime = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
+        Log.d(TAG, "시간 알림 작업 시작 - 현재 시각: $currentTime")
         
         try {
-            // Set foreground service notification
-            setForeground(createForegroundInfo())
+            // CPU가 절전 모드로 들어가는 것을 방지
+            acquireWakeLock()
+            Log.d(TAG, "WakeLock 획득 완료")
             
-            // Initialize TTS
+            // Foreground 서비스로 실행하여 시스템에 의한 종료 방지
+            val foregroundInfo = createForegroundInfo()
+            setForeground(foregroundInfo)
+            Log.d(TAG, "Foreground 서비스 시작됨")
+            
+            // TTS 초기화
+            Log.d(TAG, "TTS 초기화 시작")
+            val startTime = System.currentTimeMillis()
             tts = await { callback ->
                 TextToSpeech(context) { status ->
                     if (status == TextToSpeech.SUCCESS) {
@@ -56,7 +64,8 @@ class TimeAnnouncementWorker(
                             Log.e(TAG, "한국어 TTS가 지원되지 않습니다")
                             callback(false)
                         } else {
-                            Log.d(TAG, "TTS 초기화 성공")
+                            val initTime = System.currentTimeMillis() - startTime
+                            Log.d(TAG, "TTS 초기화 성공 (소요 시간: ${initTime}ms)")
                             callback(true)
                         }
                     } else {
@@ -71,30 +80,40 @@ class TimeAnnouncementWorker(
                 return@withContext Result.retry()
             }
 
-            // Get current time
+            // 현재 시간 가져오기
             val calendar = Calendar.getInstance()
             val hour = calendar.get(Calendar.HOUR_OF_DAY)
             val minute = calendar.get(Calendar.MINUTE)
             val timeString = String.format("현재 시각은 %d시 %d분 입니다.", hour, minute)
-            Log.d(TAG, "재생할 텍스트: $timeString")
+            
+            // 음성 출력 시작 전 로그
+            Log.d(TAG, "▶ 시간 알림 재생 시작: $timeString")
 
-            // Speak the time
-            val result = speakText(timeString)
-            if (!result) {
+            // 시간 알림 음성 출력
+            val speakResult = speakText(timeString)
+            if (!speakResult) {
                 Log.e(TAG, "시간 알림 음성 재생 실패")
                 return@withContext Result.retry()
             }
 
-            Log.d(TAG, "시간 알림 음성 재생 완료")
+            Log.d(TAG, "✓ 시간 알림 음성 재생 완료")
+            
+            // 추가 대기 시간
+            Log.d(TAG, "추가 안정화 대기 시간 1초 시작")
+            delay(1000)
+            Log.d(TAG, "추가 안정화 대기 시간 종료")
+            
             Result.success()
         } catch (e: Exception) {
-            Log.e(TAG, "시간 알림 작업 중 오류 발생", e)
+            Log.e(TAG, "시간 알림 작업 중 오류 발생: ${e.message}", e)
             Result.retry()
         } finally {
+            Log.d(TAG, "자원 해제 시작")
             releaseWakeLock()
             tts?.stop()
             tts?.shutdown()
             tts = null
+            Log.d(TAG, "자원 해제 완료, 작업 종료")
         }
     }
 
@@ -103,36 +122,42 @@ class TimeAnnouncementWorker(
             suspendCancellableCoroutine { continuation ->
                 tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                     override fun onStart(utteranceId: String) {
-                        Log.d(TAG, "음성 재생 시작: $text")
+                        Log.d(TAG, "▶▶ 음성 재생 시작: $text (ID: $utteranceId)")
                     }
 
                     override fun onDone(utteranceId: String) {
-                        Log.d(TAG, "음성 재생 완료: $text")
+                        Log.d(TAG, "✓✓ 음성 재생 완료: $text (ID: $utteranceId)")
                         continuation.resume(true)
                     }
 
                     @Deprecated("Deprecated in Java")
                     override fun onError(utteranceId: String) {
-                        Log.e(TAG, "음성 재생 오류 발생: $text")
+                        Log.e(TAG, "⚠️ 음성 재생 오류 발생: $text (ID: $utteranceId)")
                         continuation.resume(false)
                     }
 
                     @Deprecated("Deprecated in Java")
                     override fun onError(utteranceId: String, errorCode: Int) {
-                        Log.e(TAG, "음성 재생 오류 발생 (코드: $errorCode): $text")
+                        Log.e(TAG, "⚠️ 음성 재생 오류 발생 (코드: $errorCode): $text (ID: $utteranceId)")
                         continuation.resume(false)
                     }
                 })
 
-                Log.d(TAG, "TTS speak() 호출: $text")
+                Log.d(TAG, "TTS speak() 메서드 호출: $text")
                 
                 // Use the non-deprecated version of speak
                 val bundle = Bundle()
                 bundle.putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, "timeAnnouncement")
-                tts?.speak(text, TextToSpeech.QUEUE_FLUSH, bundle, "timeAnnouncement")
+                val speakResult = tts?.speak(text, TextToSpeech.QUEUE_FLUSH, bundle, "timeAnnouncement")
+                Log.d(TAG, "TTS speak() 호출 결과: $speakResult")
+                
+                if (speakResult == TextToSpeech.ERROR) {
+                    Log.e(TAG, "⚠️ TTS speak() 메서드가 ERROR를 반환했습니다")
+                    continuation.resume(false)
+                }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "음성 재생 중 예외 발생: ${e.message}")
+            Log.e(TAG, "⚠️ 음성 재생 중 예외 발생: ${e.message}", e)
             false
         }
     }
@@ -147,7 +172,7 @@ class TimeAnnouncementWorker(
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error in TTS initialization", e)
+            Log.e(TAG, "TTS 초기화 중 예외 발생", e)
             continuation.resume(null)
         }
     }
@@ -172,11 +197,11 @@ class TimeAnnouncementWorker(
                 PowerManager.PARTIAL_WAKE_LOCK,
                 "TimeTalk:TimeAnnouncement"
             ).apply {
-                acquire(10 * 60 * 1000L) // 10 minutes timeout
+                acquire(60 * 1000L) // 1분 타임아웃
             }
-            Log.d(TAG, "WakeLock acquired")
+            Log.d(TAG, "WakeLock 획득됨 (60초)")
         } catch (e: Exception) {
-            Log.e(TAG, "Error acquiring WakeLock", e)
+            Log.e(TAG, "WakeLock 획득 중 오류 발생", e)
         }
     }
 
@@ -185,11 +210,11 @@ class TimeAnnouncementWorker(
             wakeLock?.let {
                 if (it.isHeld) {
                     it.release()
-                    Log.d(TAG, "WakeLock released")
+                    Log.d(TAG, "WakeLock 해제됨")
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error releasing WakeLock", e)
+            Log.e(TAG, "WakeLock 해제 중 오류 발생", e)
         }
     }
 } 

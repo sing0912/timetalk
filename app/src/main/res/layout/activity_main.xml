@@ -1,17 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- 메인 화면의 레이아웃을 정의하는 LinearLayout -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:gravity="center"
-    android:padding="16dp">
+    android:padding="16dp"
+    tools:context=".MainActivity">
 
     <!-- 앱 제목을 표시하는 TextView -->
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="시간 알림 앱"
+        android:text="시간 알림 서비스"
         android:textSize="24sp"
         android:textStyle="bold"
         android:layout_marginBottom="32dp"/>
@@ -29,6 +31,23 @@
         android:id="@+id/stopButton"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="시간 알림 중지"/>
+        android:text="시간 알림 중지"
+        android:layout_marginBottom="16dp"/>
+        
+    <!-- 백그라운드 모드로 실행하는 버튼 -->
+    <Button
+        android:id="@+id/backgroundModeButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="백그라운드 모드 시작"
+        android:layout_marginBottom="32dp"/>
+        
+    <!-- 상태를 표시하는 TextView -->
+    <TextView
+        android:id="@+id/statusTextView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="상태: 대기 중"
+        android:textSize="16sp"/>
 
 </LinearLayout> 
