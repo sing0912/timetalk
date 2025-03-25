@@ -7,13 +7,13 @@ import android.speech.tts.TextToSpeech
 import android.util.Log
 import android.widget.Button
 import android.widget.Toast
+import androidx.annotation.VisibleForTesting
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.work.*
 import java.util.*
 import java.util.concurrent.TimeUnit
-import javax.annotation.VisibleForTesting
 
 /**
  * 메인 액티비티 클래스
