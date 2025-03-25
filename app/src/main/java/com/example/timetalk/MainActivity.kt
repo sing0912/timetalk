@@ -2,14 +2,19 @@ package com.example.timetalk
 
 import android.Manifest
 import android.app.ActivityManager
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
 import android.speech.tts.TextToSpeech
+import android.speech.tts.TextToSpeech.OnInitListener
 import android.util.Log
 import android.widget.Button
 import android.widget.TextView
@@ -42,6 +47,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     
     private val TAG = "MainActivity"
     private var isBackgroundMode = false
+    private var ttsErrorReceiver: BroadcastReceiver? = null
 
     /**
      * 액티비티가 생성될 때 호출되는 메소드
@@ -70,6 +76,9 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         
         // 알림 채널 생성
         createNotificationChannel()
+        
+        // TTS 오류 브로드캐스트 리시버 등록
+        registerTtsErrorReceiver()
 
         // 시작 버튼 클릭 이벤트 처리
         startButton.setOnClickListener {
@@ -379,7 +388,14 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         backgroundModeButton.text = "백그라운드 모드 시작"
         updateStatus("상태: 백그라운드 모드 종료됨")
         
-        WorkManager.getInstance(this).cancelUniqueWork("background_time_announcement")
+        // 모든 작업 취소
+        WorkManager.getInstance(this).cancelAllWork()
+        Log.d(TAG, "★★★★★★★★★★ 모든 작업 취소됨 ★★★★★★★★★★")
+        
+        // 알림 취소
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+        notificationManager.cancel(1)
+        
         Toast.makeText(this, "백그라운드 모드가 종료되었습니다.", Toast.LENGTH_SHORT).show()
     }
 
@@ -413,19 +429,23 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     override fun onDestroy() {
         Log.d(TAG, "onDestroy 호출됨")
         
-        // 백그라운드 모드가 활성화된 경우 앱 종료 시에도 작업 유지
-        if (!isBackgroundMode) {
-            WorkManager.getInstance(this).cancelAllWork()
-            Log.d(TAG, "모든 WorkManager 작업 취소됨")
-        } else {
-            Log.d(TAG, "백그라운드 모드 활성화 - 작업 유지됨")
+        // TTS 자원 해제
+        tts?.stop()
+        tts?.shutdown()
+        
+        // 작업 취소
+        WorkManager.getInstance(this).cancelAllWork()
+        
+        // 브로드캐스트 리시버 해제
+        ttsErrorReceiver?.let {
+            try {
+                unregisterReceiver(it)
+                Log.d(TAG, "★★★★★★★★★★ TTS 오류 브로드캐스트 리시버 해제됨 ★★★★★★★★★★")
+            } catch (e: Exception) {
+                Log.e(TAG, "브로드캐스트 리시버 해제 중 오류: ${e.message}", e)
+            }
         }
         
-        if (::tts.isInitialized) {
-            tts.stop()
-            tts.shutdown()
-            Log.d(TAG, "TTS 자원 해제됨")
-        }
         super.onDestroy()
     }
 
@@ -457,5 +477,29 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             
             Log.d(TAG, "알림 채널 생성됨: time_announcement")
         }
+    }
+
+    private fun registerTtsErrorReceiver() {
+        ttsErrorReceiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                Log.d(TAG, "★★★★★★★★★★ TTS 오류 브로드캐스트 수신됨 ★★★★★★★★★★")
+                
+                // TTS 오류가 발생하면 백그라운드 모드를 재시작
+                if (isBackgroundMode) {
+                    Log.d(TAG, "★★★★★★★★★★ TTS 오류로 인한 백그라운드 모드 재시작 ★★★★★★★★★★")
+                    
+                    // 잠시 대기 후 백그라운드 모드 재시작
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        stopBackgroundMode()
+                        Handler(Looper.getMainLooper()).postDelayed({
+                            startBackgroundMode()
+                        }, 2000)
+                    }, 1000)
+                }
+            }
+        }
+        
+        registerReceiver(ttsErrorReceiver, IntentFilter("com.example.timetalk.TTS_ERROR"))
+        Log.d(TAG, "★★★★★★★★★★ TTS 오류 브로드캐스트 리시버 등록됨 ★★★★★★★★★★")
     }
 } 

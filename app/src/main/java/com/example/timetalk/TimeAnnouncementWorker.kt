@@ -5,6 +5,7 @@ import android.content.Intent
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
+import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
 import android.speech.tts.TextToSpeech
@@ -17,8 +18,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Date
+import java.util.Locale
+import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 
 /**
@@ -36,8 +40,15 @@ class TimeAnnouncementWorker(
     private val TAG = "TimeAnnouncementWorker"
     private var tts: TextToSpeech? = null
     private var wakeLock: PowerManager.WakeLock? = null
-    private lateinit var audioManager: AudioManager
+    private var audioManager: AudioManager? = null
     private var audioFocusRequest: AudioFocusRequest? = null
+    private var isTtsInitialized = false
+    
+    // 싱글톤 TTS 인스턴스를 위한 컴패니언 객체
+    companion object {
+        private var sharedTts: TextToSpeech? = null
+        private var isTtsInitializing = false
+    }
 
     /**
      * Worker가 실행될 때 호출되는 메소드
@@ -45,212 +56,298 @@ class TimeAnnouncementWorker(
      * 
      * @return Result 작업 실행 결과 (성공/실패/재시도)
      */
-    override suspend fun doWork(): Result = withContext(Dispatchers.Main) {
-        val currentTime = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
-        Log.d(TAG, "★★★★★★★★★★ 시간 알림 작업 시작 - 현재 시각: $currentTime ★★★★★★★★★★")
+    override suspend fun doWork(): Result {
+        Log.d(TAG, "★★★★★★★★★★ 시간 알림 작업 시작 - 현재 시각: ${SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())} ★★★★★★★★★★")
         
         try {
-            // 오디오 매니저 초기화
-            audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-            
-            // CPU가 절전 모드로 들어가는 것을 방지
+            // 웨이크락 획득 (화면이 꺼져도 작업 진행)
             acquireWakeLock()
-            Log.d(TAG, "★★★★★★★★★★ WakeLock 획득 완료 ★★★★★★★★★★")
             
-            // Foreground 서비스로 실행하여 시스템에 의한 종료 방지
-            val foregroundInfo = createForegroundInfo()
-            setForeground(foregroundInfo)
+            // 포그라운드 서비스로 설정하여 안정적인 실행 보장
+            setForeground(createForegroundInfo())
             Log.d(TAG, "★★★★★★★★★★ Foreground 서비스 시작됨 ★★★★★★★★★★")
             
-            // 오디오 포커스 획득
-            val audioFocusResult = requestAudioFocus()
-            Log.d(TAG, "★★★★★★★★★★ 오디오 포커스 획득 결과: $audioFocusResult ★★★★★★★★★★")
+            // 오디오 매니저 초기화 및 오디오 포커스 요청
+            audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            val focusResult = requestAudioFocus()
+            Log.d(TAG, "★★★★★★★★★★ 오디오 포커스 획득 결과: $focusResult ★★★★★★★★★★")
             
-            // TTS 초기화
-            Log.d(TAG, "★★★★★★★★★★ TTS 초기화 시작 ★★★★★★★★★★")
-            val startTime = System.currentTimeMillis()
-            
-            // TTS 직접 초기화
-            val ttsInitResult = suspendCancellableCoroutine<Boolean> { continuation ->
-                try {
-                    tts = TextToSpeech(context) { status ->
-                        if (status == TextToSpeech.SUCCESS) {
-                            val result = tts?.setLanguage(Locale.KOREAN)
-                            if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-                                Log.e(TAG, "★★★★★★★★★★ 한국어 TTS가 지원되지 않습니다 ★★★★★★★★★★")
-                                continuation.resume(false)
-                            } else {
-                                val initTime = System.currentTimeMillis() - startTime
-                                Log.d(TAG, "★★★★★★★★★★ TTS 초기화 성공 (소요 시간: ${initTime}ms) ★★★★★★★★★★")
-                                
-                                // TTS 음량 최대로 설정
-                                tts?.setSpeechRate(0.9f)  // 약간 느리게 설정
-                                tts?.setPitch(1.0f)      // 기본 피치
-                                
-                                // 음성 출력 전 잠시 대기
-                                Thread.sleep(500)
-                                
-                                continuation.resume(true)
-                            }
-                        } else {
-                            Log.e(TAG, "★★★★★★★★★★ TTS 초기화 실패: $status ★★★★★★★★★★")
-                            continuation.resume(false)
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.e(TAG, "★★★★★★★★★★ TTS 초기화 중 예외 발생: ${e.message} ★★★★★★★★★★", e)
-                    continuation.resume(false)
-                }
+            // TTS 초기화 및 시간 알림
+            if (announceCurrentTime()) {
+                Log.d(TAG, "★★★★★★★★★★ 시간 알림 성공 ★★★★★★★★★★")
+                return Result.success()
+            } else {
+                Log.e(TAG, "★★★★★★★★★★ 시간 알림 실패 ★★★★★★★★★★")
+                return Result.retry()
             }
-            
-            if (!ttsInitResult) {
-                Log.e(TAG, "★★★★★★★★★★ TTS 초기화 실패 ★★★★★★★★★★")
-                return@withContext Result.retry()
-            }
-
-            // 현재 시간 가져오기
-            val calendar = Calendar.getInstance()
-            val hour = calendar.get(Calendar.HOUR_OF_DAY)
-            val minute = calendar.get(Calendar.MINUTE)
-            val timeString = String.format("현재 시각은 %d시 %d분 입니다.", hour, minute)
-            
-            // 음성 출력 시작 전 로그
-            Log.d(TAG, "★★★★★★★★★★ 시간 알림 재생 시작: $timeString ★★★★★★★★★★")
-
-            // 시간 알림 음성 출력
-            val speakResult = speakText(timeString)
-            if (!speakResult) {
-                Log.e(TAG, "★★★★★★★★★★ 시간 알림 음성 재생 실패 ★★★★★★★★★★")
-                return@withContext Result.retry()
-            }
-
-            Log.d(TAG, "★★★★★★★★★★ 시간 알림 음성 재생 완료 ★★★★★★★★★★")
-            
-            // 추가 대기 시간
-            Log.d(TAG, "★★★★★★★★★★ 추가 안정화 대기 시간 3초 시작 ★★★★★★★★★★")
-            delay(3000)
-            Log.d(TAG, "★★★★★★★★★★ 추가 안정화 대기 시간 종료 ★★★★★★★★★★")
-            
-            Result.success()
         } catch (e: Exception) {
-            Log.e(TAG, "★★★★★★★★★★ 시간 알림 작업 중 오류 발생: ${e.message} ★★★★★★★★★★", e)
-            Result.retry()
+            Log.e(TAG, "★★★★★★★★★★ 작업 실행 중 예외 발생: ${e.message} ★★★★★★★★★★", e)
+            return Result.retry()
         } finally {
-            Log.d(TAG, "★★★★★★★★★★ 자원 해제 시작 ★★★★★★★★★★")
-            abandonAudioFocus()
-            releaseWakeLock()
-            tts?.stop()
-            tts?.shutdown()
-            tts = null
-            Log.d(TAG, "★★★★★★★★★★ 자원 해제 완료, 작업 종료 ★★★★★★★★★★")
+            // 리소스 해제
+            releaseResources()
         }
     }
-
-    private suspend fun speakText(text: String): Boolean = withContext(Dispatchers.Main) {
-        try {
-            suspendCancellableCoroutine { continuation ->
-                tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                    override fun onStart(utteranceId: String) {
-                        Log.d(TAG, "★★★★★★★★★★ 음성 재생 시작: $text (ID: $utteranceId) ★★★★★★★★★★")
-                    }
-
-                    override fun onDone(utteranceId: String) {
-                        Log.d(TAG, "★★★★★★★★★★ 음성 재생 완료: $text (ID: $utteranceId) ★★★★★★★★★★")
-                        continuation.resume(true)
-                    }
-
-                    @Deprecated("Deprecated in Java")
-                    override fun onError(utteranceId: String) {
-                        Log.e(TAG, "★★★★★★★★★★ 음성 재생 오류 발생: $text (ID: $utteranceId) ★★★★★★★★★★")
-                        continuation.resume(false)
-                    }
-
-                    @Deprecated("Deprecated in Java")
-                    override fun onError(utteranceId: String, errorCode: Int) {
-                        Log.e(TAG, "★★★★★★★★★★ 음성 재생 오류 발생 (코드: $errorCode): $text (ID: $utteranceId) ★★★★★★★★★★")
-                        continuation.resume(false)
-                    }
-                })
-
-                Log.d(TAG, "★★★★★★★★★★ TTS speak() 메서드 호출: $text ★★★★★★★★★★")
-                
-                // 볼륨 최대화 
-                val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-                val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
-                audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, maxVolume, 0)
-                
-                // Use the non-deprecated version of speak
-                val bundle = Bundle()
-                bundle.putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, "timeAnnouncement")
-                bundle.putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, 1.0f) // 최대 볼륨
-                
-                val speakResult = tts?.speak(text, TextToSpeech.QUEUE_FLUSH, bundle, "timeAnnouncement")
-                Log.d(TAG, "★★★★★★★★★★ TTS speak() 호출 결과: $speakResult ★★★★★★★★★★")
-                
-                if (speakResult == TextToSpeech.ERROR) {
-                    Log.e(TAG, "★★★★★★★★★★ TTS speak() 메서드가 ERROR를 반환했습니다 ★★★★★★★★★★")
-                    continuation.resume(false)
+    
+    private suspend fun announceCurrentTime(): Boolean {
+        return withContext(Dispatchers.Main) {
+            try {
+                // 싱글톤 TTS 사용
+                if (sharedTts == null && !isTtsInitializing) {
+                    isTtsInitializing = true
+                    initTTS()
                 }
                 
-                // 음성 재생이 멈추는 것을 방지하기 위해 타임아웃 설정
-                Thread {
-                    try {
-                        Thread.sleep(8000) // 8초 타임아웃
-                        if (continuation.isActive) {
-                            Log.d(TAG, "★★★★★★★★★★ TTS 타임아웃: 수동으로 완료 처리 ★★★★★★★★★★")
-                            continuation.resume(true)
+                // TTS 초기화 확인
+                if (isTtsInitialized && sharedTts != null) {
+                    // 현재 시간 가져오기
+                    val currentTime = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
+                    val hour = currentTime.substring(0, 2).toInt()
+                    val minute = currentTime.substring(3, 5).toInt()
+                    
+                    // 시간 알림 텍스트 생성
+                    val text = "현재 시각은 $hour 시 $minute 분입니다."
+                    Log.d(TAG, "★★★★★★★★★★ 현재 시간: $text ★★★★★★★★★★")
+                    
+                    // 볼륨 최대로 설정
+                    val maxVolume = audioManager?.getStreamMaxVolume(AudioManager.STREAM_MUSIC) ?: 15
+                    audioManager?.setStreamVolume(AudioManager.STREAM_MUSIC, maxVolume, 0)
+                    Log.d(TAG, "★★★★★★★★★★ 볼륨 최대로 설정: $maxVolume ★★★★★★★★★★")
+                    
+                    // TTS로 시간 알림
+                    speakText(text)
+                    return@withContext true
+                } else {
+                    Log.e(TAG, "★★★★★★★★★★ TTS가 초기화되지 않았습니다 ★★★★★★★★★★")
+                    // MainActivity에 의도적으로 알림을 보내 앱을 재시작
+                    sendTtsErrorBroadcast()
+                    return@withContext false
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "★★★★★★★★★★ 시간 알림 중 예외 발생: ${e.message} ★★★★★★★★★★", e)
+                sendTtsErrorBroadcast()
+                return@withContext false
+            }
+        }
+    }
+    
+    private fun sendTtsErrorBroadcast() {
+        try {
+            val intent = Intent("com.example.timetalk.TTS_ERROR")
+            context.sendBroadcast(intent)
+            Log.d(TAG, "★★★★★★★★★★ TTS 오류 브로드캐스트 전송됨 ★★★★★★★★★★")
+        } catch (e: Exception) {
+            Log.e(TAG, "브로드캐스트 전송 중 오류: ${e.message}", e)
+        }
+    }
+    
+    private suspend fun initTTS() {
+        try {
+            Log.d(TAG, "★★★★★★★★★★ TTS 초기화 시작 ★★★★★★★★★★")
+            
+            // TTS 객체가 이미 초기화된 경우
+            if (sharedTts != null) {
+                tts = sharedTts
+                isTtsInitialized = true
+                Log.d(TAG, "★★★★★★★★★★ 기존 TTS 인스턴스 사용 ★★★★★★★★★★")
+                return
+            }
+            
+            // 타임아웃 설정 (10초)
+            withTimeout(10000L) {
+                suspendCancellableCoroutine<Unit> { continuation ->
+                    val newTts = TextToSpeech(context) { status ->
+                        if (status == TextToSpeech.SUCCESS) {
+                            sharedTts = newTts
+                            tts = newTts
+                            
+                            // 언어 설정
+                            val result = newTts.setLanguage(Locale.KOREAN)
+                            if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+                                Log.e(TAG, "★★★★★★★★★★ 한국어 지원되지 않음, 기본 언어 사용 ★★★★★★★★★★")
+                                newTts.setLanguage(Locale.getDefault())
+                            }
+                            
+                            // 오디오 스트림 설정
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                                val audioAttributes = AudioAttributes.Builder()
+                                    .setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY)
+                                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                                    .build()
+                                newTts.setAudioAttributes(audioAttributes)
+                            } else {
+                                @Suppress("DEPRECATION")
+                                newTts.setAudioStreamType(AudioManager.STREAM_MUSIC)
+                            }
+                            
+                            // 음성 속도 및 피치 설정
+                            newTts.setSpeechRate(1.0f)
+                            newTts.setPitch(1.0f)
+                            
+                            isTtsInitialized = true
+                            Log.d(TAG, "★★★★★★★★★★ TTS 초기화 완료 ★★★★★★★★★★")
+                        } else {
+                            Log.e(TAG, "★★★★★★★★★★ TTS 초기화 실패: $status ★★★★★★★★★★")
                         }
-                    } catch (e: Exception) {
-                        Log.e(TAG, "★★★★★★★★★★ TTS 타임아웃 스레드 오류: ${e.message} ★★★★★★★★★★")
+                        isTtsInitializing = false
+                        continuation.resume(Unit)
                     }
-                }.start()
+                }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "★★★★★★★★★★ 음성 재생 중 예외 발생: ${e.message} ★★★★★★★★★★", e)
+            isTtsInitializing = false
+            Log.e(TAG, "★★★★★★★★★★ TTS 초기화 중 예외 발생: ${e.message} ★★★★★★★★★★", e)
+        }
+    }
+    
+    private suspend fun speakText(text: String): Boolean {
+        return try {
+            withTimeout(15000L) { // 15초 타임아웃
+                suspendCancellableCoroutine { continuation ->
+                    tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                        override fun onStart(utteranceId: String) {
+                            Log.d(TAG, "★★★★★★★★★★ 음성 재생 시작: $text (ID: $utteranceId) ★★★★★★★★★★")
+                        }
+                        
+                        override fun onDone(utteranceId: String) {
+                            Log.d(TAG, "★★★★★★★★★★ 음성 재생 완료: $text (ID: $utteranceId) ★★★★★★★★★★")
+                            continuation.resume(true)
+                        }
+                        
+                        @Deprecated("Deprecated in Java")
+                        override fun onError(utteranceId: String) {
+                            Log.e(TAG, "★★★★★★★★★★ 음성 재생 오류: $text (ID: $utteranceId) ★★★★★★★★★★")
+                            continuation.resume(false)
+                        }
+                        
+                        override fun onError(utteranceId: String, errorCode: Int) {
+                            super.onError(utteranceId, errorCode)
+                            Log.e(TAG, "★★★★★★★★★★ 음성 재생 오류 (코드: $errorCode): $text (ID: $utteranceId) ★★★★★★★★★★")
+                            continuation.resume(false)
+                        }
+                    })
+                    
+                    val utteranceId = "timeAnnouncement_${System.currentTimeMillis()}"
+                    val params = Bundle()
+                    params.putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, 1.0f) // 최대 볼륨
+                    
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, params, utteranceId)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, HashMap<String, String>().apply {
+                            put(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, utteranceId)
+                        })
+                    }
+                    
+                    // 5초 후에도 완료되지 않으면 강제로 완료 처리 (안전 장치)
+                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                        if (continuation.isActive) {
+                            Log.d(TAG, "★★★★★★★★★★ 음성 재생 타임아웃으로 강제 완료 ★★★★★★★★★★")
+                            continuation.resume(true)
+                        }
+                    }, 5000)
+                }
+            }
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "★★★★★★★★★★ TTS 음성 합성 중 예외 발생: ${e.message} ★★★★★★★★★★", e)
             false
         }
     }
-
-    private fun requestAudioFocus(): Int {
+    
+    private fun acquireWakeLock() {
         try {
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            if (wakeLock == null) {
+                val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+                wakeLock = powerManager.newWakeLock(
+                    PowerManager.PARTIAL_WAKE_LOCK,
+                    "TimeTalk:TimeAnnouncementWakeLock"
+                ).apply {
+                    setReferenceCounted(false)
+                }
+            }
+            
+            wakeLock?.acquire(60 * 1000L) // 60초 동안 웨이크락 유지
+            Log.d(TAG, "★★★★★★★★★★ WakeLock 획득됨 (60초) ★★★★★★★★★★")
+            Log.d(TAG, "★★★★★★★★★★ WakeLock 획득 완료 ★★★★★★★★★★")
+        } catch (e: Exception) {
+            Log.e(TAG, "★★★★★★★★★★ WakeLock 획득 실패: ${e.message} ★★★★★★★★★★", e)
+        }
+    }
+    
+    private fun requestAudioFocus(): Int {
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 val audioAttributes = AudioAttributes.Builder()
                     .setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                     .build()
-                    
+                
                 audioFocusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
                     .setAudioAttributes(audioAttributes)
                     .setAcceptsDelayedFocusGain(true)
+                    .setWillPauseWhenDucked(true)
                     .setOnAudioFocusChangeListener { }
                     .build()
-                    
-                return audioManager.requestAudioFocus(audioFocusRequest!!)
+                
+                audioManager?.requestAudioFocus(audioFocusRequest!!) ?: AudioManager.AUDIOFOCUS_REQUEST_FAILED
             } else {
                 @Suppress("DEPRECATION")
-                return audioManager.requestAudioFocus(
+                audioManager?.requestAudioFocus(
                     null,
                     AudioManager.STREAM_MUSIC,
                     AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK
-                )
+                ) ?: AudioManager.AUDIOFOCUS_REQUEST_FAILED
             }
         } catch (e: Exception) {
-            Log.e(TAG, "★★★★★★★★★★ 오디오 포커스 요청 오류: ${e.message} ★★★★★★★★★★")
-            return AudioManager.AUDIOFOCUS_REQUEST_FAILED
+            Log.e(TAG, "★★★★★★★★★★ 오디오 포커스 요청 실패: ${e.message} ★★★★★★★★★★", e)
+            AudioManager.AUDIOFOCUS_REQUEST_FAILED
         }
     }
     
     private fun abandonAudioFocus() {
         try {
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                audioFocusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                audioFocusRequest?.let { audioManager?.abandonAudioFocusRequest(it) }
             } else {
                 @Suppress("DEPRECATION")
-                audioManager.abandonAudioFocus(null)
+                audioManager?.abandonAudioFocus(null)
             }
             Log.d(TAG, "★★★★★★★★★★ 오디오 포커스 해제됨 ★★★★★★★★★★")
         } catch (e: Exception) {
-            Log.e(TAG, "★★★★★★★★★★ 오디오 포커스 해제 오류: ${e.message} ★★★★★★★★★★")
+            Log.e(TAG, "★★★★★★★★★★ 오디오 포커스 해제 실패: ${e.message} ★★★★★★★★★★", e)
+        }
+    }
+    
+    private fun releaseResources() {
+        try {
+            // WakeLock 해제
+            try {
+                wakeLock?.let {
+                    if (it.isHeld) {
+                        it.release()
+                        Log.d(TAG, "★★★★★★★★★★ WakeLock 해제됨 ★★★★★★★★★★")
+                    }
+                }
+                wakeLock = null
+            } catch (e: Exception) {
+                Log.e(TAG, "WakeLock 해제 실패: ${e.message}", e)
+            }
+            
+            // 오디오 포커스 해제
+            try {
+                abandonAudioFocus()
+            } catch (e: Exception) {
+                Log.e(TAG, "오디오 포커스 해제 실패: ${e.message}", e)
+            }
+            
+            // TTS는 공유 인스턴스이므로 여기서 해제하지 않음
+            // 대신 MainActivity에서 앱 종료 시 해제
+            
+            Log.d(TAG, "★★★★★★★★★★ 모든 리소스 해제 완료 ★★★★★★★★★★")
+        } catch (e: Exception) {
+            Log.e(TAG, "★★★★★★★★★★ 리소스 해제 중 예외 발생: ${e.message} ★★★★★★★★★★", e)
         }
     }
 
@@ -277,33 +374,5 @@ class TimeAnnouncementWorker(
             .build()
 
         return ForegroundInfo(1, notification)
-    }
-
-    private fun acquireWakeLock() {
-        try {
-            val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
-            wakeLock = powerManager.newWakeLock(
-                PowerManager.PARTIAL_WAKE_LOCK,
-                "TimeTalk:TimeAnnouncement"
-            ).apply {
-                acquire(60 * 1000L) // 1분 타임아웃
-            }
-            Log.d(TAG, "★★★★★★★★★★ WakeLock 획득됨 (60초) ★★★★★★★★★★")
-        } catch (e: Exception) {
-            Log.e(TAG, "★★★★★★★★★★ WakeLock 획득 중 오류 발생 ★★★★★★★★★★", e)
-        }
-    }
-
-    private fun releaseWakeLock() {
-        try {
-            wakeLock?.let {
-                if (it.isHeld) {
-                    it.release()
-                    Log.d(TAG, "★★★★★★★★★★ WakeLock 해제됨 ★★★★★★★★★★")
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "★★★★★★★★★★ WakeLock 해제 중 오류 발생 ★★★★★★★★★★", e)
-        }
     }
 } 
