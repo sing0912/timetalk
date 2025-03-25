@@ -178,19 +178,8 @@ class TimeAnnouncementWorker(
                                             .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                                             .build()
                                     )
-                                } else {
-                                    // 레거시 오디오 스트림 타입 설정 (API 21 미만)
-                                    try {
-                                        val method = TextToSpeech::class.java.getMethod(
-                                            "setAudioStreamType", 
-                                            Int::class.javaPrimitiveType
-                                        )
-                                        method.invoke(tts, AudioManager.STREAM_MUSIC)
-                                        Log.d(TAG, "★★★★★★★★★★ 레거시 오디오 스트림 타입 설정 완료 ★★★★★★★★★★")
-                                    } catch (e: Exception) {
-                                        Log.e(TAG, "★★★★★★★★★★ 레거시 오디오 스트림 타입 설정 실패: ${e.message} ★★★★★★★★★★")
-                                    }
-                                }
+                                } 
+                                // Lollipop 미만은 별도 설정 없이 기본값 사용
                                 
                                 // 음성 속도 및 피치 설정
                                 tts?.setSpeechRate(1.0f)
