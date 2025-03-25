@@ -156,46 +156,58 @@ class TimeAnnouncementWorker(
             // 타임아웃 설정 (10초)
             withTimeout(10000L) {
                 suspendCancellableCoroutine<Unit> { continuation ->
-                    // TTS 객체 초기화
-                    tts = TextToSpeech(context) { status ->
-                        try {
-                            if (status == TextToSpeech.SUCCESS) {
-                                // 초기화 성공
-                                sharedTts = tts
-                                
-                                // 언어 설정
-                                val result = tts?.setLanguage(Locale.KOREAN)
-                                if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-                                    Log.e(TAG, "★★★★★★★★★★ 한국어 지원되지 않음, 기본 언어 사용 ★★★★★★★★★★")
-                                    tts?.setLanguage(Locale.getDefault())
+                    // TTS 객체 초기화는 별도의 비동기 작업
+                    try {
+                        val newTts = TextToSpeech(context) { status ->
+                            try {
+                                if (status == TextToSpeech.SUCCESS) {
+                                    // 초기화 성공
+                                    tts = newTts
+                                    sharedTts = newTts
+                                    
+                                    // 언어 설정
+                                    val result = newTts.setLanguage(Locale.KOREAN)
+                                    if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+                                        Log.e(TAG, "★★★★★★★★★★ 한국어 지원되지 않음, 기본 언어 사용 ★★★★★★★★★★")
+                                        newTts.setLanguage(Locale.getDefault())
+                                    }
+                                    
+                                    // 오디오 스트림 설정
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                                        newTts.setAudioAttributes(
+                                            AudioAttributes.Builder()
+                                                .setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY)
+                                                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                                                .build()
+                                        )
+                                    } 
+                                    
+                                    // 음성 속도 및 피치 설정
+                                    newTts.setSpeechRate(1.0f)
+                                    newTts.setPitch(1.0f)
+                                    
+                                    isTtsInitialized = true
+                                    Log.d(TAG, "★★★★★★★★★★ TTS 초기화 완료 ★★★★★★★★★★")
+                                } else {
+                                    Log.e(TAG, "★★★★★★★★★★ TTS 초기화 실패: $status ★★★★★★★★★★")
+                                    tts = null
+                                    sharedTts = null
                                 }
-                                
-                                // 오디오 스트림 설정
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                                    tts?.setAudioAttributes(
-                                        AudioAttributes.Builder()
-                                            .setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY)
-                                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                                            .build()
-                                    )
-                                } 
-                                // Lollipop 미만은 별도 설정 없이 기본값 사용
-                                
-                                // 음성 속도 및 피치 설정
-                                tts?.setSpeechRate(1.0f)
-                                tts?.setPitch(1.0f)
-                                
-                                isTtsInitialized = true
-                                Log.d(TAG, "★★★★★★★★★★ TTS 초기화 완료 ★★★★★★★★★★")
-                            } else {
-                                Log.e(TAG, "★★★★★★★★★★ TTS 초기화 실패: $status ★★★★★★★★★★")
+                            } catch (e: Exception) {
+                                Log.e(TAG, "★★★★★★★★★★ TTS 설정 중 오류: ${e.message} ★★★★★★★★★★", e)
+                                tts = null
+                                sharedTts = null
+                            } finally {
+                                isTtsInitializing = false
+                                continuation.resume(Unit)
                             }
-                        } catch (e: Exception) {
-                            Log.e(TAG, "★★★★★★★★★★ TTS 설정 중 오류: ${e.message} ★★★★★★★★★★", e)
-                        } finally {
-                            isTtsInitializing = false
-                            continuation.resume(Unit)
                         }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "★★★★★★★★★★ TTS 인스턴스 생성 실패: ${e.message} ★★★★★★★★★★", e)
+                        tts = null
+                        sharedTts = null
+                        isTtsInitializing = false
+                        continuation.resume(Unit)
                     }
                 }
             }
@@ -207,9 +219,15 @@ class TimeAnnouncementWorker(
     
     private suspend fun speakText(text: String): Boolean {
         return try {
+            val localTts = tts // 로컬 변수에 복사하여 Null 안전성 확보
+            if (localTts == null) {
+                Log.e(TAG, "★★★★★★★★★★ TTS 인스턴스가 없습니다 ★★★★★★★★★★")
+                return false
+            }
+            
             withTimeout(15000L) { // 15초 타임아웃
                 suspendCancellableCoroutine { continuation ->
-                    tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                    localTts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                         override fun onStart(utteranceId: String) {
                             Log.d(TAG, "★★★★★★★★★★ 음성 재생 시작: $text (ID: $utteranceId) ★★★★★★★★★★")
                         }
@@ -237,10 +255,10 @@ class TimeAnnouncementWorker(
                     params.putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, 1.0f) // 최대 볼륨
                     
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, params, utteranceId)
+                        localTts.speak(text, TextToSpeech.QUEUE_FLUSH, params, utteranceId)
                     } else {
                         @Suppress("DEPRECATION")
-                        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, HashMap<String, String>().apply {
+                        localTts.speak(text, TextToSpeech.QUEUE_FLUSH, HashMap<String, String>().apply {
                             put(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, utteranceId)
                         })
                     }
@@ -347,8 +365,8 @@ class TimeAnnouncementWorker(
                 Log.e(TAG, "오디오 포커스 해제 실패: ${e.message}", e)
             }
             
-            // TTS는 공유 인스턴스이므로 여기서 해제하지 않음
-            // 대신 MainActivity에서 앱 종료 시 해제
+            // TTS는 공유 인스턴스이므로 종료하지 않고 참조만 해제
+            tts = null
             
             Log.d(TAG, "★★★★★★★★★★ 모든 리소스 해제 완료 ★★★★★★★★★★")
         } catch (e: Exception) {

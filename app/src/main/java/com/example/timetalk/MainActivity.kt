@@ -233,109 +233,127 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         backgroundModeButton.text = "백그라운드 모드 종료"
         updateStatus("상태: 백그라운드 모드 시작 중...")
         
-        // 배터리 최적화 제외 요청
-        requestIgnoreBatteryOptimization()
-        
-        // 현재 등록된 모든 작업 취소
-        WorkManager.getInstance(this).cancelAllWork()
-        Log.d(TAG, "★★★ 기존 등록된 모든 작업 취소됨 ★★★")
-        
-        // 잠시 대기하여 이전 작업이 모두 취소되도록 함
-        Thread {
-            try {
-                Thread.sleep(1000)
-                runOnUiThread {
-                    // 즉시 한 번 시간 알림 (UI 스레드에서 실행)
-                    if (isTtsReady) {
-                        val currentTime = Calendar.getInstance()
-                        val hour = currentTime.get(Calendar.HOUR_OF_DAY)
-                        val minute = currentTime.get(Calendar.MINUTE)
-                        val timeString = String.format("현재 시각은 %d시 %d분 입니다. 이후 백그라운드에서도 1시간마다 시간을 알려드립니다.", hour, minute)
-                        tts.speak(timeString, TextToSpeech.QUEUE_FLUSH, null, "initial_announcement")
-                        Log.d(TAG, "★★★ 초기 시간 알림 직접 실행: $timeString ★★★")
-                    }
-                    
-                    // 백그라운드에서도 강제로 실행되도록 설정
-                    val constraints = Constraints.Builder()
-                        .setRequiresBatteryNotLow(false)
-                        .setRequiresCharging(false)
-                        .setRequiresDeviceIdle(false)
-                        .build()
-                        
-                    try {
-                        // 15초 후에 즉시 실행되는 일회성 작업 등록 (테스트 용도)
-                        val oneTimeWorkRequest = OneTimeWorkRequestBuilder<TimeAnnouncementWorker>()
-                            .setConstraints(constraints)
-                            .setInitialDelay(15, TimeUnit.SECONDS)
-                            .addTag("one_time_announcement")
-                            .build()
-                            
-                        WorkManager.getInstance(applicationContext).enqueue(oneTimeWorkRequest)
-                        Log.d(TAG, "★★★ 15초 후 실행되는 일회성 작업 등록됨 (ID: ${oneTimeWorkRequest.id}) ★★★")
-                        
-                        // 1시간마다 실행되는 주기적 작업 등록
-                        val periodicWorkRequest = PeriodicWorkRequestBuilder<TimeAnnouncementWorker>(
-                            1, TimeUnit.HOURS  // 1시간 간격
-                        )
-                            .setConstraints(constraints)
-                            .addTag("background_time_announcement")
-                            .setBackoffCriteria(
-                                BackoffPolicy.LINEAR,
-                                10, TimeUnit.SECONDS
-                            )
-                            .build()
-
-                        // 1시간마다 실행되는 주기적 작업
-                        WorkManager.getInstance(applicationContext).enqueueUniquePeriodicWork(
-                            "background_time_announcement",
-                            ExistingPeriodicWorkPolicy.CANCEL_AND_REENQUEUE, // 기존 작업 취소하고 다시 등록
-                            periodicWorkRequest
-                        )
-                        
-                        Log.d(TAG, "★★★ 주기적 작업 등록 완료 (ID: ${periodicWorkRequest.id}) ★★★")
-                        
-                        // 앞으로 3시간 동안 1시간마다 실행되는 정확한 일회성 작업도 함께 등록
-                        scheduleHourlyWorkers()
-                        
-                        // 작업 상태 모니터링 (일회성 작업)
-                        WorkManager.getInstance(applicationContext)
-                            .getWorkInfosByTagLiveData("one_time_announcement")
-                            .observe(this@MainActivity) { workInfoList ->
-                                workInfoList?.forEach { workInfo ->
-                                    val state = workInfo.state.name
-                                    Log.d(TAG, "★★★ 일회성 작업 상태: $state (ID: ${workInfo.id}) ★★★")
-                                    updateStatus("상태: 일회성 작업 $state")
-                                }
+        try {
+            // 배터리 최적화 제외 요청
+            requestIgnoreBatteryOptimization()
+            
+            // 현재 등록된 모든 작업 취소
+            WorkManager.getInstance(this).cancelAllWork()
+            Log.d(TAG, "★★★ 기존 등록된 모든 작업 취소됨 ★★★")
+            
+            // 잠시 대기하여 이전 작업이 모두 취소되도록 함
+            Thread {
+                try {
+                    Thread.sleep(1000)
+                    runOnUiThread {
+                        // 즉시 한 번 시간 알림 (UI 스레드에서 실행)
+                        if (isTtsReady) {
+                            try {
+                                val currentTime = Calendar.getInstance()
+                                val hour = currentTime.get(Calendar.HOUR_OF_DAY)
+                                val minute = currentTime.get(Calendar.MINUTE)
+                                val timeString = String.format("현재 시각은 %d시 %d분 입니다. 이후 백그라운드에서도 1시간마다 시간을 알려드립니다.", hour, minute)
+                                tts.speak(timeString, TextToSpeech.QUEUE_FLUSH, null, "initial_announcement")
+                                Log.d(TAG, "★★★ 초기 시간 알림 직접 실행: $timeString ★★★")
+                            } catch (e: Exception) {
+                                Log.e(TAG, "★★★ 초기 시간 알림 실행 중 오류: ${e.message} ★★★", e)
                             }
-                            
-                        // 작업 상태 모니터링 (주기적 작업)
-                        WorkManager.getInstance(applicationContext)
-                            .getWorkInfosByTagLiveData("background_time_announcement")
-                            .observe(this@MainActivity) { workInfoList ->
-                                workInfoList?.forEach { workInfo ->
-                                    val state = workInfo.state.name
-                                    Log.d(TAG, "★★★ 주기적 작업 상태: $state (ID: ${workInfo.id}) ★★★")
-                                    updateStatus("상태: 주기적 작업 $state")
-                                    
-                                    // 실행 중인 경우 시간 표시
-                                    if (workInfo.state == WorkInfo.State.RUNNING) {
-                                        val currentTime = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
-                                        updateStatus("상태: 주기적 작업 실행 중 ($currentTime)")
-                                    }
-                                }
-                            }
-                            
-                    } catch (e: Exception) {
-                        Log.e(TAG, "★★★ 작업 등록 중 오류 발생: ${e.message} ★★★", e)
-                        updateStatus("상태: 작업 등록 오류 - ${e.message}")
+                        } else {
+                            Log.e(TAG, "★★★ TTS가 준비되지 않아 초기 알림을 실행할 수 없습니다 ★★★")
+                        }
+                        
+                        setupBackgroundWork()
                     }
-                    
-                    Toast.makeText(this@MainActivity, "백그라운드 모드가 시작되었습니다. 15초 후와 이후 1시간마다 시간을 알려드립니다.", Toast.LENGTH_LONG).show()
+                } catch (e: Exception) {
+                    Log.e(TAG, "★★★ 백그라운드 모드 초기화 오류: ${e.message} ★★★", e)
                 }
+            }.start()
+        } catch (e: Exception) {
+            Log.e(TAG, "★★★ 백그라운드 모드 시작 중 오류: ${e.message} ★★★", e)
+            Toast.makeText(this, "백그라운드 모드 시작 중 오류가 발생했습니다: ${e.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+    
+    private fun setupBackgroundWork() {
+        try {
+            // 백그라운드에서도 강제로 실행되도록 설정
+            val constraints = Constraints.Builder()
+                .setRequiresBatteryNotLow(false)
+                .setRequiresCharging(false)
+                .setRequiresDeviceIdle(false)
+                .build()
+                
+            try {
+                // 15초 후에 즉시 실행되는 일회성 작업 등록 (테스트 용도)
+                val oneTimeWorkRequest = OneTimeWorkRequestBuilder<TimeAnnouncementWorker>()
+                    .setConstraints(constraints)
+                    .setInitialDelay(15, TimeUnit.SECONDS)
+                    .addTag("one_time_announcement")
+                    .build()
+                    
+                WorkManager.getInstance(applicationContext).enqueue(oneTimeWorkRequest)
+                Log.d(TAG, "★★★ 15초 후 실행되는 일회성 작업 등록됨 (ID: ${oneTimeWorkRequest.id}) ★★★")
+                
+                // 1시간마다 실행되는 주기적 작업 등록
+                val periodicWorkRequest = PeriodicWorkRequestBuilder<TimeAnnouncementWorker>(
+                    1, TimeUnit.HOURS  // 1시간 간격
+                )
+                    .setConstraints(constraints)
+                    .addTag("background_time_announcement")
+                    .setBackoffCriteria(
+                        BackoffPolicy.LINEAR,
+                        10, TimeUnit.SECONDS
+                    )
+                    .build()
+
+                // 1시간마다 실행되는 주기적 작업
+                WorkManager.getInstance(applicationContext).enqueueUniquePeriodicWork(
+                    "background_time_announcement",
+                    ExistingPeriodicWorkPolicy.CANCEL_AND_REENQUEUE, // 기존 작업 취소하고 다시 등록
+                    periodicWorkRequest
+                )
+                
+                Log.d(TAG, "★★★ 주기적 작업 등록 완료 (ID: ${periodicWorkRequest.id}) ★★★")
+                
+                // 앞으로 3시간 동안 1시간마다 실행되는 정확한 일회성 작업도 함께 등록
+                scheduleHourlyWorkers()
+                
+                // 작업 상태 모니터링 (일회성 작업)
+                WorkManager.getInstance(applicationContext)
+                    .getWorkInfosByTagLiveData("one_time_announcement")
+                    .observe(this@MainActivity) { workInfoList ->
+                        workInfoList?.forEach { workInfo ->
+                            val state = workInfo.state.name
+                            Log.d(TAG, "★★★ 일회성 작업 상태: $state (ID: ${workInfo.id}) ★★★")
+                            updateStatus("상태: 일회성 작업 $state")
+                        }
+                    }
+                    
+                // 작업 상태 모니터링 (주기적 작업)
+                WorkManager.getInstance(applicationContext)
+                    .getWorkInfosByTagLiveData("background_time_announcement")
+                    .observe(this@MainActivity) { workInfoList ->
+                        workInfoList?.forEach { workInfo ->
+                            val state = workInfo.state.name
+                            Log.d(TAG, "★★★ 주기적 작업 상태: $state (ID: ${workInfo.id}) ★★★")
+                            updateStatus("상태: 주기적 작업 $state")
+                            
+                            // 실행 중인 경우 시간 표시
+                            if (workInfo.state == WorkInfo.State.RUNNING) {
+                                val currentTime = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
+                                updateStatus("상태: 주기적 작업 실행 중 ($currentTime)")
+                            }
+                        }
+                    }
+                    
+                Toast.makeText(this@MainActivity, "백그라운드 모드가 시작되었습니다. 15초 후와 이후 1시간마다 시간을 알려드립니다.", Toast.LENGTH_LONG).show()
             } catch (e: Exception) {
-                Log.e(TAG, "★★★ 백그라운드 모드 초기화 오류: ${e.message} ★★★", e)
+                Log.e(TAG, "★★★ 작업 등록 중 오류 발생: ${e.message} ★★★", e)
+                updateStatus("상태: 작업 등록 오류 - ${e.message}")
             }
-        }.start()
+        } catch (e: Exception) {
+            Log.e(TAG, "★★★ 백그라운드 작업 설정 중 오류: ${e.message} ★★★", e)
+        }
     }
     
     private fun scheduleHourlyWorkers() {
