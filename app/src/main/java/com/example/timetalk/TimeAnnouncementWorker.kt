@@ -43,6 +43,7 @@ class TimeAnnouncementWorker(
     private var audioManager: AudioManager? = null
     private var audioFocusRequest: AudioFocusRequest? = null
     private var isTtsInitialized = false
+    private var newTts: TextToSpeech? = null  // 전역 변수로 선언
     
     // 싱글톤 TTS 인스턴스를 위한 컴패니언 객체
     companion object {
@@ -158,7 +159,7 @@ class TimeAnnouncementWorker(
                 suspendCancellableCoroutine<Unit> { continuation ->
                     // TTS 객체 초기화는 별도의 비동기 작업
                     try {
-                        val newTts = TextToSpeech(context) { status ->
+                        newTts = TextToSpeech(context) { status ->
                             try {
                                 if (status == TextToSpeech.SUCCESS) {
                                     // 초기화 성공
@@ -166,15 +167,15 @@ class TimeAnnouncementWorker(
                                     sharedTts = newTts
                                     
                                     // 언어 설정
-                                    val result = newTts.setLanguage(Locale.KOREAN)
+                                    val result = newTts?.setLanguage(Locale.KOREAN)
                                     if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
                                         Log.e(TAG, "★★★★★★★★★★ 한국어 지원되지 않음, 기본 언어 사용 ★★★★★★★★★★")
-                                        newTts.setLanguage(Locale.getDefault())
+                                        newTts?.setLanguage(Locale.getDefault())
                                     }
                                     
                                     // 오디오 스트림 설정
                                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                                        newTts.setAudioAttributes(
+                                        newTts?.setAudioAttributes(
                                             AudioAttributes.Builder()
                                                 .setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY)
                                                 .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
@@ -183,8 +184,8 @@ class TimeAnnouncementWorker(
                                     } 
                                     
                                     // 음성 속도 및 피치 설정
-                                    newTts.setSpeechRate(1.0f)
-                                    newTts.setPitch(1.0f)
+                                    newTts?.setSpeechRate(1.0f)
+                                    newTts?.setPitch(1.0f)
                                     
                                     isTtsInitialized = true
                                     Log.d(TAG, "★★★★★★★★★★ TTS 초기화 완료 ★★★★★★★★★★")
@@ -192,11 +193,13 @@ class TimeAnnouncementWorker(
                                     Log.e(TAG, "★★★★★★★★★★ TTS 초기화 실패: $status ★★★★★★★★★★")
                                     tts = null
                                     sharedTts = null
+                                    newTts = null
                                 }
                             } catch (e: Exception) {
                                 Log.e(TAG, "★★★★★★★★★★ TTS 설정 중 오류: ${e.message} ★★★★★★★★★★", e)
                                 tts = null
                                 sharedTts = null
+                                newTts = null
                             } finally {
                                 isTtsInitializing = false
                                 continuation.resume(Unit)
@@ -206,6 +209,7 @@ class TimeAnnouncementWorker(
                         Log.e(TAG, "★★★★★★★★★★ TTS 인스턴스 생성 실패: ${e.message} ★★★★★★★★★★", e)
                         tts = null
                         sharedTts = null
+                        newTts = null
                         isTtsInitializing = false
                         continuation.resume(Unit)
                     }
