@@ -6,13 +6,27 @@ import android.app.NotificationManager
 import android.content.Context
 import android.os.Build
 import android.util.Log
+import androidx.work.Configuration
+import androidx.work.WorkManager
 
-class TimeTalkApplication : Application() {
+class TimeTalkApplication : Application(), Configuration.Provider {
     private val TAG = "TimeTalkApplication"
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
+        
+        // Initialize WorkManager
+        WorkManager.initialize(
+            this,
+            getWorkManagerConfiguration()
+        )
+    }
+
+    override fun getWorkManagerConfiguration(): Configuration {
+        return Configuration.Builder()
+            .setMinimumLoggingLevel(Log.DEBUG)
+            .build()
     }
 
     private fun createNotificationChannel() {
