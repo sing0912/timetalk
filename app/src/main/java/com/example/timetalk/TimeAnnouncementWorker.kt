@@ -156,42 +156,48 @@ class TimeAnnouncementWorker(
             // 타임아웃 설정 (10초)
             withTimeout(10000L) {
                 suspendCancellableCoroutine<Unit> { continuation ->
-                    val ttsInstance = TextToSpeech(context) { status ->
-                        if (status == TextToSpeech.SUCCESS) {
-                            // 초기화 성공
-                            tts = ttsInstance
-                            sharedTts = ttsInstance
-                            
-                            // 언어 설정
-                            val result = ttsInstance.setLanguage(Locale.KOREAN)
-                            if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-                                Log.e(TAG, "★★★★★★★★★★ 한국어 지원되지 않음, 기본 언어 사용 ★★★★★★★★★★")
-                                ttsInstance.setLanguage(Locale.getDefault())
-                            }
-                            
-                            // 오디오 스트림 설정
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                                val audioAttributes = AudioAttributes.Builder()
-                                    .setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY)
-                                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                                    .build()
-                                ttsInstance.setAudioAttributes(audioAttributes)
+                    // TTS 객체 초기화
+                    tts = TextToSpeech(context) { status ->
+                        try {
+                            if (status == TextToSpeech.SUCCESS) {
+                                // 초기화 성공
+                                sharedTts = tts
+                                
+                                // 언어 설정
+                                val result = tts?.setLanguage(Locale.KOREAN)
+                                if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+                                    Log.e(TAG, "★★★★★★★★★★ 한국어 지원되지 않음, 기본 언어 사용 ★★★★★★★★★★")
+                                    tts?.setLanguage(Locale.getDefault())
+                                }
+                                
+                                // 오디오 스트림 설정
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                                    tts?.setAudioAttributes(
+                                        AudioAttributes.Builder()
+                                            .setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY)
+                                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                                            .build()
+                                    )
+                                } else {
+                                    @Suppress("DEPRECATION")
+                                    tts?.setAudioStreamType(AudioManager.STREAM_MUSIC)
+                                }
+                                
+                                // 음성 속도 및 피치 설정
+                                tts?.setSpeechRate(1.0f)
+                                tts?.setPitch(1.0f)
+                                
+                                isTtsInitialized = true
+                                Log.d(TAG, "★★★★★★★★★★ TTS 초기화 완료 ★★★★★★★★★★")
                             } else {
-                                @Suppress("DEPRECATION")
-                                ttsInstance.setAudioStreamType(AudioManager.STREAM_MUSIC)
+                                Log.e(TAG, "★★★★★★★★★★ TTS 초기화 실패: $status ★★★★★★★★★★")
                             }
-                            
-                            // 음성 속도 및 피치 설정
-                            ttsInstance.setSpeechRate(1.0f)
-                            ttsInstance.setPitch(1.0f)
-                            
-                            isTtsInitialized = true
-                            Log.d(TAG, "★★★★★★★★★★ TTS 초기화 완료 ★★★★★★★★★★")
-                        } else {
-                            Log.e(TAG, "★★★★★★★★★★ TTS 초기화 실패: $status ★★★★★★★★★★")
+                        } catch (e: Exception) {
+                            Log.e(TAG, "★★★★★★★★★★ TTS 설정 중 오류: ${e.message} ★★★★★★★★★★", e)
+                        } finally {
+                            isTtsInitializing = false
+                            continuation.resume(Unit)
                         }
-                        isTtsInitializing = false
-                        continuation.resume(Unit)
                     }
                 }
             }
