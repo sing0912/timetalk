@@ -13,6 +13,7 @@ import androidx.core.content.ContextCompat
 import androidx.work.*
 import java.util.*
 import java.util.concurrent.TimeUnit
+import javax.annotation.VisibleForTesting
 
 /**
  * 메인 액티비티 클래스
@@ -21,7 +22,9 @@ import java.util.concurrent.TimeUnit
 class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     // TextToSpeech 객체: 텍스트를 음성으로 변환하는 기능을 제공
     private lateinit var tts: TextToSpeech
-    private var isTtsReady = false
+    // Make isTtsReady accessible for testing
+    @VisibleForTesting
+    internal var isTtsReady = false
     // UI 컴포넌트: 시간 알림 시작 버튼
     private lateinit var startButton: Button
     // UI 컴포넌트: 시간 알림 중지 버튼
