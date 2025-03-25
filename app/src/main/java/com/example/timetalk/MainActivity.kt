@@ -19,6 +19,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.work.*
+import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.TimeUnit
 
@@ -216,6 +217,20 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         // 배터리 최적화 제외 요청
         requestIgnoreBatteryOptimization()
         
+        // 현재 등록된 모든 작업 취소
+        WorkManager.getInstance(this).cancelAllWork()
+        Log.d(TAG, "기존 등록된 모든 작업 취소됨")
+        
+        // 즉시 한 번 시간 알림
+        if (isTtsReady) {
+            val currentTime = Calendar.getInstance()
+            val hour = currentTime.get(Calendar.HOUR_OF_DAY)
+            val minute = currentTime.get(Calendar.MINUTE)
+            val timeString = String.format("현재 시각은 %d시 %d분 입니다. 이후 백그라운드에서도 1분마다 시간을 알려드립니다.", hour, minute)
+            tts.speak(timeString, TextToSpeech.QUEUE_FLUSH, null, "initial_announcement")
+            Log.d(TAG, "★★★ 초기 시간 알림 직접 실행: $timeString ★★★")
+        }
+        
         // 백그라운드에서도 강제로 실행되도록 설정
         val constraints = Constraints.Builder()
             .setRequiresBatteryNotLow(false)
@@ -223,8 +238,20 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             .setRequiresDeviceIdle(false)
             .build()
 
-        val backgroundWorkRequest = PeriodicWorkRequestBuilder<TimeAnnouncementWorker>(
-            1, TimeUnit.MINUTES
+        // 15초 후에 즉시 실행되는 일회성 작업 등록 (테스트 용도)
+        val oneTimeWorkRequest = OneTimeWorkRequestBuilder<TimeAnnouncementWorker>()
+            .setConstraints(constraints)
+            .setInitialDelay(15, TimeUnit.SECONDS)
+            .addTag("one_time_announcement")
+            .build()
+            
+        WorkManager.getInstance(this).enqueue(oneTimeWorkRequest)
+        Log.d(TAG, "★★★ 15초 후 실행되는 일회성 작업 등록 ★★★")
+
+        // 1분마다 실행되는 주기적 작업 등록
+        val periodicWorkRequest = PeriodicWorkRequestBuilder<TimeAnnouncementWorker>(
+            1, TimeUnit.MINUTES,
+            30, TimeUnit.SECONDS
         )
             .setConstraints(constraints)
             .addTag("background_time_announcement")
@@ -234,11 +261,40 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         WorkManager.getInstance(this).enqueueUniquePeriodicWork(
             "background_time_announcement",
             ExistingPeriodicWorkPolicy.UPDATE,
-            backgroundWorkRequest
+            periodicWorkRequest
         )
         
-        Log.d(TAG, "백그라운드 모드 WorkManager 작업 등록 완료")
-        Toast.makeText(this, "백그라운드 모드가 시작되었습니다. 앱을 최소화해도 시간을 알려드립니다.", Toast.LENGTH_LONG).show()
+        Log.d(TAG, "★★★ 백그라운드 모드 주기적 작업 등록 완료 (1분마다 실행) ★★★")
+        
+        // 작업 상태 모니터링 (일회성 작업)
+        WorkManager.getInstance(this)
+            .getWorkInfosByTagLiveData("one_time_announcement")
+            .observe(this) { workInfoList ->
+                workInfoList?.forEach { workInfo ->
+                    val state = workInfo.state.name
+                    Log.d(TAG, "★★★ 일회성 작업 상태: $state ★★★")
+                    updateStatus("상태: 일회성 작업 $state")
+                }
+            }
+            
+        // 작업 상태 모니터링 (주기적 작업)
+        WorkManager.getInstance(this)
+            .getWorkInfosByTagLiveData("background_time_announcement")
+            .observe(this) { workInfoList ->
+                workInfoList?.forEach { workInfo ->
+                    val state = workInfo.state.name
+                    Log.d(TAG, "★★★ 주기적 작업 상태: $state ★★★")
+                    updateStatus("상태: 주기적 작업 $state")
+                    
+                    // 실행 중인 경우 시간 표시
+                    if (workInfo.state == WorkInfo.State.RUNNING) {
+                        val currentTime = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
+                        updateStatus("상태: 주기적 작업 실행 중 ($currentTime)")
+                    }
+                }
+            }
+        
+        Toast.makeText(this, "백그라운드 모드가 시작되었습니다. 15초 후와 이후 1분마다 시간을 알려드립니다.", Toast.LENGTH_LONG).show()
     }
     
     private fun requestIgnoreBatteryOptimization() {
