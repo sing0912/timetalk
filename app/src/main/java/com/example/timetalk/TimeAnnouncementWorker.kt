@@ -111,11 +111,13 @@ class TimeAnnouncementWorker(
                         continuation.resume(true)
                     }
 
+                    @Suppress("DEPRECATION")
                     override fun onError(utteranceId: String) {
                         Log.e(TAG, "음성 재생 오류 발생: $text")
                         continuation.resume(false)
                     }
 
+                    @Suppress("DEPRECATION")
                     @Deprecated("Deprecated in Java")
                     override fun onError(utteranceId: String, errorCode: Int) {
                         Log.e(TAG, "음성 재생 오류 발생 (코드: $errorCode): $text")
