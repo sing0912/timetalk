@@ -156,16 +156,17 @@ class TimeAnnouncementWorker(
             // 타임아웃 설정 (10초)
             withTimeout(10000L) {
                 suspendCancellableCoroutine<Unit> { continuation ->
-                    val newTts = TextToSpeech(context) { status ->
+                    val ttsInstance = TextToSpeech(context) { status ->
                         if (status == TextToSpeech.SUCCESS) {
-                            sharedTts = newTts
-                            tts = newTts
+                            // 초기화 성공
+                            tts = ttsInstance
+                            sharedTts = ttsInstance
                             
                             // 언어 설정
-                            val result = newTts.setLanguage(Locale.KOREAN)
+                            val result = ttsInstance.setLanguage(Locale.KOREAN)
                             if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
                                 Log.e(TAG, "★★★★★★★★★★ 한국어 지원되지 않음, 기본 언어 사용 ★★★★★★★★★★")
-                                newTts.setLanguage(Locale.getDefault())
+                                ttsInstance.setLanguage(Locale.getDefault())
                             }
                             
                             // 오디오 스트림 설정
@@ -174,15 +175,15 @@ class TimeAnnouncementWorker(
                                     .setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY)
                                     .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                                     .build()
-                                newTts.setAudioAttributes(audioAttributes)
+                                ttsInstance.setAudioAttributes(audioAttributes)
                             } else {
                                 @Suppress("DEPRECATION")
-                                newTts.setAudioStreamType(AudioManager.STREAM_MUSIC)
+                                ttsInstance.setAudioStreamType(AudioManager.STREAM_MUSIC)
                             }
                             
                             // 음성 속도 및 피치 설정
-                            newTts.setSpeechRate(1.0f)
-                            newTts.setPitch(1.0f)
+                            ttsInstance.setSpeechRate(1.0f)
+                            ttsInstance.setPitch(1.0f)
                             
                             isTtsInitialized = true
                             Log.d(TAG, "★★★★★★★★★★ TTS 초기화 완료 ★★★★★★★★★★")
