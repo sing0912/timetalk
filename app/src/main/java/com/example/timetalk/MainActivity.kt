@@ -56,58 +56,90 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
      * @param savedInstanceState 이전 상태가 저장된 경우 해당 데이터를 포함하는 Bundle 객체
      */
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        Log.d(TAG, "onCreate 호출됨")
-        
-        // activity_main.xml 레이아웃을 현재 액티비티에 설정
-        setContentView(R.layout.activity_main)
+        try {
+            super.onCreate(savedInstanceState)
+            Log.d(TAG, "onCreate 호출됨")
+            
+            // activity_main.xml 레이아웃을 현재 액티비티에 설정
+            setContentView(R.layout.activity_main)
 
-        // Initialize UI components
-        startButton = findViewById(R.id.startButton)
-        stopButton = findViewById(R.id.stopButton)
-        backgroundModeButton = findViewById(R.id.backgroundModeButton)
-        statusTextView = findViewById(R.id.statusTextView)
-        
-        // Initialize TTS
-        tts = TextToSpeech(this, this)
-        
-        // Request necessary permissions
-        checkPermissions()
-        
-        // 알림 채널 생성
-        createNotificationChannel()
-        
-        // TTS 오류 브로드캐스트 리시버 등록
-        registerTtsErrorReceiver()
+            // Initialize UI components
+            startButton = findViewById(R.id.startButton)
+            stopButton = findViewById(R.id.stopButton)
+            backgroundModeButton = findViewById(R.id.backgroundModeButton)
+            statusTextView = findViewById(R.id.statusTextView)
+            
+            // Initialize TTS with error handling
+            try {
+                tts = TextToSpeech(this) { status ->
+                    if (status == TextToSpeech.SUCCESS) {
+                        val result = tts.setLanguage(Locale.KOREAN)
+                        if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+                            Log.e(TAG, "한국어가 지원되지 않습니다")
+                            runOnUiThread {
+                                Toast.makeText(this, "한국어가 지원되지 않습니다.", Toast.LENGTH_SHORT).show()
+                            }
+                        } else {
+                            isTtsReady = true
+                            Log.d(TAG, "TTS 초기화 성공 - 한국어 설정됨")
+                            runOnUiThread {
+                                updateStatus("상태: TTS 준비 완료")
+                            }
+                        }
+                    } else {
+                        Log.e(TAG, "TTS 초기화 실패: $status")
+                        runOnUiThread {
+                            Toast.makeText(this, "TTS 초기화에 실패했습니다.", Toast.LENGTH_SHORT).show()
+                            updateStatus("상태: TTS 초기화 실패")
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "TTS 초기화 중 예외 발생", e)
+                Toast.makeText(this, "TTS 초기화 중 오류가 발생했습니다.", Toast.LENGTH_SHORT).show()
+            }
+            
+            // Request necessary permissions
+            checkPermissions()
+            
+            // 알림 채널 생성
+            createNotificationChannel()
+            
+            // TTS 오류 브로드캐스트 리시버 등록
+            registerTtsErrorReceiver()
 
-        // 시작 버튼 클릭 이벤트 처리
-        startButton.setOnClickListener {
-            Log.d(TAG, "시작 버튼 클릭됨")
-            updateStatus("상태: 시간 알림 시작됨")
-            startTimeAnnouncement()
-        }
+            // 시작 버튼 클릭 이벤트 처리
+            startButton.setOnClickListener {
+                Log.d(TAG, "시작 버튼 클릭됨")
+                updateStatus("상태: 시간 알림 시작됨")
+                startTimeAnnouncement()
+            }
 
-        // 중지 버튼 클릭 이벤트 처리
-        stopButton.setOnClickListener {
-            Log.d(TAG, "중지 버튼 클릭됨")
-            updateStatus("상태: 시간 알림 중지됨")
-            stopTimeAnnouncement()
-        }
-        
-        backgroundModeButton.setOnClickListener {
-            Log.d(TAG, "백그라운드 모드 버튼 클릭됨")
-            if (!isBackgroundMode) {
-                startBackgroundMode()
-            } else {
+            // 중지 버튼 클릭 이벤트 처리
+            stopButton.setOnClickListener {
+                Log.d(TAG, "중지 버튼 클릭됨")
+                updateStatus("상태: 시간 알림 중지됨")
+                stopTimeAnnouncement()
+            }
+            
+            backgroundModeButton.setOnClickListener {
+                Log.d(TAG, "백그라운드 모드 버튼 클릭됨")
+                if (!isBackgroundMode) {
+                    startBackgroundMode()
+                } else {
+                    stopBackgroundMode()
+                }
+            }
+            
+            // 백그라운드 모드 종료 인텐트 확인
+            if (intent.getBooleanExtra("EXIT_BACKGROUND", false)) {
+                Log.d(TAG, "★★★★★★★★★★ 백그라운드 모드 종료 인텐트 수신됨 ★★★★★★★★★★")
+                isBackgroundMode = true // 현재 활성화된 것으로 간주하고 종료 처리
                 stopBackgroundMode()
             }
-        }
-        
-        // 백그라운드 모드 종료 인텐트 확인
-        if (intent.getBooleanExtra("EXIT_BACKGROUND", false)) {
-            Log.d(TAG, "★★★★★★★★★★ 백그라운드 모드 종료 인텐트 수신됨 ★★★★★★★★★★")
-            isBackgroundMode = true // 현재 활성화된 것으로 간주하고 종료 처리
-            stopBackgroundMode()
+        } catch (e: Exception) {
+            Log.e(TAG, "onCreate에서 예외 발생", e)
+            Toast.makeText(this, "앱 초기화 중 오류가 발생했습니다.", Toast.LENGTH_LONG).show()
         }
     }
 
