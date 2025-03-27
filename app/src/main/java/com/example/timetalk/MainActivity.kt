@@ -553,46 +553,75 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
      */
     private fun exitApp() {
         try {
-            // 현재 실행 중인 모든 작업 중지
+            Log.d(TAG, "앱 종료 시작")
+            
+            // 1. 백그라운드 작업 중지
             if (isBackgroundMode) {
                 stopBackgroundMode()
             }
             stopTimeAnnouncement()
             
-            // TTS 리소스 해제
+            // 2. WorkManager 작업 모두 취소
+            WorkManager.getInstance(applicationContext).cancelAllWork()
+            Log.d(TAG, "WorkManager 작업 취소 완료")
+            
+            // 3. TTS 리소스 해제
             if (::tts.isInitialized) {
-                tts.stop()
-                tts.shutdown()
-            }
-            
-            // WorkManager 작업 모두 취소
-            WorkManager.getInstance(this).cancelAllWork()
-            
-            // 알림 취소
-            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
-            notificationManager.cancel(1)
-            
-            // 브로드캐스트 리시버 해제
-            ttsErrorReceiver?.let {
                 try {
-                    unregisterReceiver(it)
-                    Log.d(TAG, "★★★★★★★★★★ TTS 오류 브로드캐스트 리시버 해제됨 ★★★★★★★★★★")
+                    tts.stop()
+                    tts.shutdown()
+                    Log.d(TAG, "TTS 리소스 해제 완료")
                 } catch (e: Exception) {
-                    Log.e(TAG, "브로드캐스트 리시버 해제 중 오류: ${e.message}", e)
+                    Log.e(TAG, "TTS 리소스 해제 중 오류: ${e.message}")
                 }
             }
             
-            Log.d(TAG, "앱 종료 처리 완료")
+            // 4. 알림 취소
+            try {
+                val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+                notificationManager.cancelAll()
+                Log.d(TAG, "알림 취소 완료")
+            } catch (e: Exception) {
+                Log.e(TAG, "알림 취소 중 오류: ${e.message}")
+            }
+            
+            // 5. 브로드캐스트 리시버 해제
+            ttsErrorReceiver?.let {
+                try {
+                    unregisterReceiver(it)
+                    Log.d(TAG, "브로드캐스트 리시버 해제 완료")
+                } catch (e: Exception) {
+                    Log.e(TAG, "브로드캐스트 리시버 해제 중 오류: ${e.message}")
+                }
+            }
+            
+            // 6. 사용자에게 종료 메시지 표시
             Toast.makeText(this, "앱을 종료합니다.", Toast.LENGTH_SHORT).show()
             
-            // 액티비티 종료
-            finish()
+            // 7. 핸들러를 사용하여 약간의 지연 후 종료 (토스트 메시지가 보이도록)
+            android.os.Handler(mainLooper).postDelayed({
+                try {
+                    // 액티비티 종료
+                    finish()
+                    
+                    // 태스크 제거
+                    finishAndRemoveTask()
+                    
+                    // 프로세스 종료
+                    android.os.Process.killProcess(android.os.Process.myPid())
+                    
+                    // 최종적으로 시스템에 종료 요청
+                    System.exit(0)
+                } catch (e: Exception) {
+                    Log.e(TAG, "최종 종료 처리 중 오류: ${e.message}")
+                }
+            }, 1000) // 1초 후 종료
             
-            // 프로세스 종료
-            android.os.Process.killProcess(android.os.Process.myPid())
         } catch (e: Exception) {
             Log.e(TAG, "앱 종료 중 오류 발생", e)
-            Toast.makeText(this, "앱 종료 중 오류가 발생했습니다.", Toast.LENGTH_SHORT).show()
+            // 오류 발생 시 강제 종료
+            android.os.Process.killProcess(android.os.Process.myPid())
+            System.exit(1)
         }
     }
 } 
