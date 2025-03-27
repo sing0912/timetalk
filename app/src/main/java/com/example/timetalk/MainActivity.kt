@@ -43,6 +43,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     // UI 컴포넌트: 시간 알림 중지 버튼
     private lateinit var stopButton: Button
     private lateinit var backgroundModeButton: Button
+    private lateinit var exitButton: Button
     private lateinit var statusTextView: TextView
     
     private val TAG = "MainActivity"
@@ -67,6 +68,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             startButton = findViewById(R.id.startButton)
             stopButton = findViewById(R.id.stopButton)
             backgroundModeButton = findViewById(R.id.backgroundModeButton)
+            exitButton = findViewById(R.id.exitButton)
             statusTextView = findViewById(R.id.statusTextView)
             
             // Initialize TTS with OnInitListener
@@ -114,6 +116,12 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 } else {
                     stopBackgroundMode()
                 }
+            }
+
+            // 종료 버튼 클릭 이벤트 처리
+            exitButton.setOnClickListener {
+                Log.d(TAG, "종료 버튼 클릭됨")
+                exitApp()
             }
             
             // 백그라운드 모드 종료 인텐트 확인
@@ -538,5 +546,53 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         
         registerReceiver(ttsErrorReceiver, IntentFilter("com.example.timetalk.TTS_ERROR"))
         Log.d(TAG, "★★★★★★★★★★ TTS 오류 브로드캐스트 리시버 등록됨 ★★★★★★★★★★")
+    }
+
+    /**
+     * 앱을 안전하게 종료하는 메소드
+     */
+    private fun exitApp() {
+        try {
+            // 현재 실행 중인 모든 작업 중지
+            if (isBackgroundMode) {
+                stopBackgroundMode()
+            }
+            stopTimeAnnouncement()
+            
+            // TTS 리소스 해제
+            if (::tts.isInitialized) {
+                tts.stop()
+                tts.shutdown()
+            }
+            
+            // WorkManager 작업 모두 취소
+            WorkManager.getInstance(this).cancelAllWork()
+            
+            // 알림 취소
+            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+            notificationManager.cancel(1)
+            
+            // 브로드캐스트 리시버 해제
+            ttsErrorReceiver?.let {
+                try {
+                    unregisterReceiver(it)
+                    Log.d(TAG, "★★★★★★★★★★ TTS 오류 브로드캐스트 리시버 해제됨 ★★★★★★★★★★")
+                } catch (e: Exception) {
+                    Log.e(TAG, "브로드캐스트 리시버 해제 중 오류: ${e.message}", e)
+                }
+            }
+            
+            Log.d(TAG, "앱 종료 처리 완료")
+            Toast.makeText(this, "앱을 종료합니다.", Toast.LENGTH_SHORT).show()
+            
+            // 액티비티 종료
+            finish()
+            
+            // 프로세스 종료
+            android.os.Process.killProcess(android.os.Process.myPid())
+        } catch (e: Exception) {
+            Log.e(TAG, "앱 종료 중 오류 발생", e)
+            Toast.makeText(this, "앱 종료 중 오류가 발생했습니다.", Toast.LENGTH_SHORT).show()
+        }
     }
 } 
