@@ -8,7 +8,7 @@ import androidx.test.espresso.assertion.ViewAssertions.matches
 import androidx.test.espresso.matcher.ViewMatchers.*
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.hamcrest.Matchers.anyOf
-import org.hamcrest.Matchers.is
+import org.hamcrest.CoreMatchers.`is` as Is
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.util.*
