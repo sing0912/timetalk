@@ -84,9 +84,9 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
 
     override fun onDestroy() {
-        if (::tts.isInitialized) {
-            tts?.stop()
-            tts?.shutdown()
+        tts?.let {
+            it.stop()
+            it.shutdown()
         }
         super.onDestroy()
     }
