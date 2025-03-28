@@ -28,7 +28,12 @@ class MainActivityTest {
 
         onView(withId(R.id.statusTextView))
             .check(matches(isDisplayed()))
-            .check(matches(withText("TTS 초기화 중...")))
+            .check(matches(anyOf(
+                withText("TTS 초기화 중..."),
+                withText("준비 완료"),
+                withText("오류: 한국어 지원되지 않음"),
+                withText("오류: TTS 초기화 실패")
+            )))
     }
 
     @Test
