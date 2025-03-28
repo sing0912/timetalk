@@ -8,69 +8,82 @@ import androidx.test.espresso.matcher.ViewMatchers.*
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.util.*
 
 @RunWith(AndroidJUnit4::class)
 class MainActivityTest {
 
     @Test
-    fun testUIComponents() {
+    fun testInitialState() {
         // 액티비티 실행
         ActivityScenario.launch(MainActivity::class.java)
 
-        // 모든 버튼이 화면에 표시되는지 확인
+        // 초기 상태 확인
         onView(withId(R.id.startButton))
             .check(matches(isDisplayed()))
-            .check(matches(withText("시간 알림 시작")))
+            .check(matches(isEnabled()))
 
-        onView(withId(R.id.stopButton))
+        onView(withId(R.id.statusTextView))
             .check(matches(isDisplayed()))
-            .check(matches(withText("시간 알림 중지")))
-
-        onView(withId(R.id.backgroundModeButton))
-            .check(matches(isDisplayed()))
-            .check(matches(withText("백그라운드 모드 시작")))
-
-        onView(withId(R.id.exitButton))
-            .check(matches(isDisplayed()))
-            .check(matches(withText("앱 종료")))
+            .check(matches(withText("TTS 초기화 중...")))
     }
 
     @Test
-    fun testStartButtonClick() {
+    fun testTimeAnnouncementButton() {
         // 액티비티 실행
-        ActivityScenario.launch(MainActivity::class.java)
+        val scenario = ActivityScenario.launch(MainActivity::class.java)
 
-        // 시작 버튼 클릭
+        // 버튼 클릭
         onView(withId(R.id.startButton)).perform(click())
 
-        // 상태 텍스트가 업데이트되었는지 확인
+        // TTS가 초기화되지 않은 상태에서는 에러 메시지가 표시되어야 함
         onView(withId(R.id.statusTextView))
             .check(matches(isDisplayed()))
+
+        // TTS 초기화 상태 설정
+        scenario.onActivity { activity ->
+            activity.isTtsReady = true
+        }
+
+        // 버튼 다시 클릭
+        onView(withId(R.id.startButton)).perform(click())
+
+        // 현재 시각이 표시되는지 확인
+        val calendar = Calendar.getInstance()
+        val hour = calendar.get(Calendar.HOUR_OF_DAY)
+        val minute = calendar.get(Calendar.MINUTE)
+        onView(withId(R.id.statusTextView))
+            .check(matches(withText("현재 시각: ${hour}시 ${minute}분")))
     }
 
     @Test
-    fun testStopButtonClick() {
+    fun testTTSInitializationStates() {
         // 액티비티 실행
-        ActivityScenario.launch(MainActivity::class.java)
+        val scenario = ActivityScenario.launch(MainActivity::class.java)
 
-        // 중지 버튼 클릭
-        onView(withId(R.id.stopButton)).perform(click())
-
-        // 상태 텍스트가 업데이트되었는지 확인
+        // 초기 상태 확인
         onView(withId(R.id.statusTextView))
-            .check(matches(withText(containsString("중지"))))
-    }
+            .check(matches(withText("TTS 초기화 중...")))
 
-    @Test
-    fun testBackgroundModeButton() {
-        // 액티비티 실행
-        ActivityScenario.launch(MainActivity::class.java)
+        // TTS 초기화 성공 상태 설정
+        scenario.onActivity { activity ->
+            activity.onInit(TextToSpeech.SUCCESS)
+        }
 
-        // 백그라운드 모드 버튼 클릭
-        onView(withId(R.id.backgroundModeButton)).perform(click())
-
-        // 상태 텍스트가 업데이트되었는지 확인
+        // 성공 상태 확인
         onView(withId(R.id.statusTextView))
-            .check(matches(isDisplayed()))
+            .check(matches(withText("준비 완료")))
+
+        // 새로운 액티비티 시작
+        scenario.recreate()
+
+        // TTS 초기화 실패 상태 설정
+        scenario.onActivity { activity ->
+            activity.onInit(TextToSpeech.ERROR)
+        }
+
+        // 실패 상태 확인
+        onView(withId(R.id.statusTextView))
+            .check(matches(withText("오류: TTS 초기화 실패")))
     }
 } 
