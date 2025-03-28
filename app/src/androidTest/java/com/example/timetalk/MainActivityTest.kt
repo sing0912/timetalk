@@ -12,6 +12,7 @@ import org.hamcrest.Matchers.is
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.util.*
+import java.util.concurrent.CompletableFuture
 
 @RunWith(AndroidJUnit4::class)
 class MainActivityTest {
@@ -80,8 +81,9 @@ class MainActivityTest {
 
         // 성공 상태 확인 (한국어 지원 여부에 따라 다른 메시지 확인)
         onView(withId(R.id.statusTextView))
-            .check(matches(withText(anyOf(
-                is("준비 완료"),
+            .check(matches(withText(
+                CompletableFuture.anyOf(
+                is("준비 완료"), // Added comma here
                 is("오류: 한국어 지원되지 않음")
             ))))
 
