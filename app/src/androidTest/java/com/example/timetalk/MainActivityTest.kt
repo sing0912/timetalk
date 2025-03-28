@@ -74,7 +74,6 @@ class MainActivityTest {
             // 한국어 지원 여부 확인을 위한 설정
             activity.tts?.let { tts ->
                 tts.language = Locale.KOREAN
-                tts.country = Locale.KOREA
             }
         }
 

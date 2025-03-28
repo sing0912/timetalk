@@ -11,10 +11,10 @@ import androidx.appcompat.app.AppCompatActivity
 import java.util.*
 
 class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
-    private lateinit var tts: TextToSpeech
     private lateinit var announceTimeButton: Button
     private lateinit var statusTextView: TextView
     internal var isTtsReady = false
+    internal var tts: TextToSpeech? = null
     private var wakeLock: PowerManager.WakeLock? = null
     
     private val TAG = "MainActivity"
@@ -51,7 +51,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             val timeString = String.format("현재 시각은 %d시 %d분 입니다.", hour, minute)
             Log.d(TAG, "시간 알림: $timeString")
             
-            tts.speak(timeString, TextToSpeech.QUEUE_FLUSH, null, "TIME_ANNOUNCE")
+            tts?.speak(timeString, TextToSpeech.QUEUE_FLUSH, null, "TIME_ANNOUNCE")
             updateStatus("현재 시각: ${hour}시 ${minute}분")
         } catch (e: Exception) {
             Log.e(TAG, "시간 알림 중 오류 발생", e)
@@ -66,7 +66,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
-            val result = tts.setLanguage(Locale.KOREAN)
+            val result = tts?.setLanguage(Locale.KOREAN)
             if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
                 Log.e(TAG, "한국어가 지원되지 않습니다")
                 Toast.makeText(this, "한국어가 지원되지 않습니다.", Toast.LENGTH_SHORT).show()
@@ -85,8 +85,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
     override fun onDestroy() {
         if (::tts.isInitialized) {
-            tts.stop()
-            tts.shutdown()
+            tts?.stop()
+            tts?.shutdown()
         }
         super.onDestroy()
     }
