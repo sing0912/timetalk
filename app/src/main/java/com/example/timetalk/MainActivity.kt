@@ -1,6 +1,7 @@
 package com.example.timetalk
 
 import android.os.Bundle
+import android.os.PowerManager
 import android.speech.tts.TextToSpeech
 import android.util.Log
 import android.widget.Button
@@ -13,7 +14,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private lateinit var tts: TextToSpeech
     private lateinit var announceTimeButton: Button
     private lateinit var statusTextView: TextView
-    private var isTtsReady = false
+    internal var isTtsReady = false
+    private var wakeLock: PowerManager.WakeLock? = null
     
     private val TAG = "MainActivity"
 
