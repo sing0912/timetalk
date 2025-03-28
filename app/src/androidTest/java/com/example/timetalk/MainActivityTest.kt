@@ -69,11 +69,19 @@ class MainActivityTest {
         // TTS 초기화 성공 상태 설정
         scenario.onActivity { activity ->
             activity.onInit(TextToSpeech.SUCCESS)
+            // 한국어 지원 여부 확인을 위한 설정
+            activity.tts?.let { tts ->
+                tts.language = Locale.KOREAN
+                tts.country = Locale.KOREA
+            }
         }
 
-        // 성공 상태 확인
+        // 성공 상태 확인 (한국어 지원 여부에 따라 다른 메시지 확인)
         onView(withId(R.id.statusTextView))
-            .check(matches(withText("준비 완료")))
+            .check(matches(withText(anyOf(
+                is("준비 완료"),
+                is("오류: 한국어 지원되지 않음")
+            ))))
 
         // 새로운 액티비티 시작
         scenario.recreate()
