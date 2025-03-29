@@ -38,7 +38,7 @@ class TimeAnnouncementWorkerTest {
         // Given
         val utteranceProgressListenerSlot = slot<UtteranceProgressListener>()
         every { tts.setLanguage(Locale.KOREAN) } returns TextToSpeech.SUCCESS
-        every { tts.setOnUtteranceProgressListener(capture(utteranceProgressListenerSlot)) } just runs
+        every { tts.setOnUtteranceProgressListener(capture(utteranceProgressListenerSlot)) } answers { nothing }
         
         // When
         val result = worker.doWork()
@@ -68,9 +68,12 @@ class TimeAnnouncementWorkerTest {
         val utteranceProgressListenerSlot = slot<UtteranceProgressListener>()
         every { tts.setLanguage(Locale.KOREAN) } returns TextToSpeech.SUCCESS
         every { tts.setOnUtteranceProgressListener(capture(utteranceProgressListenerSlot)) } answers {
-            utteranceProgressListenerSlot.captured.onError("timeAnnouncement", -1)
-            Unit
+            callOriginal()
+            0
         }
+        
+        mockkStatic(TextToSpeech::class)
+        every { tts.speak(any(), any(), any(), any()) } returns TextToSpeech.ERROR
         
         // When
         val result = worker.doWork()
