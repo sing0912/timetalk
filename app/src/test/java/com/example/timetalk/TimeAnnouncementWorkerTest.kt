@@ -6,8 +6,8 @@ import android.speech.tts.UtteranceProgressListener
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.ListenableWorker
 import androidx.work.testing.TestListenableWorkerBuilder
-import androidx.work.workDataOf
 import io.mockk.*
+import io.mockk.impl.annotations.MockK
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import org.junit.Before
@@ -28,9 +28,9 @@ class TimeAnnouncementWorkerTest {
     fun setup() {
         context = ApplicationProvider.getApplicationContext()
         tts = mockk(relaxed = true)
-        worker = spyk(
-            TestListenableWorkerBuilder<TimeAnnouncementWorker>(context).build()
-        )
+        
+        // TestListenableWorkerBuilder를 올바르게 사용
+        worker = TestListenableWorkerBuilder<TimeAnnouncementWorker>(context).build()
     }
     
     @Test
@@ -38,7 +38,7 @@ class TimeAnnouncementWorkerTest {
         // Given
         val utteranceProgressListenerSlot = slot<UtteranceProgressListener>()
         every { tts.setLanguage(Locale.KOREAN) } returns TextToSpeech.SUCCESS
-        every { tts.setOnUtteranceProgressListener(capture(utteranceProgressListenerSlot)) } just Runs
+        every { tts.setOnUtteranceProgressListener(capture(utteranceProgressListenerSlot)) } just runs
         
         // When
         val result = worker.doWork()
@@ -68,7 +68,8 @@ class TimeAnnouncementWorkerTest {
         val utteranceProgressListenerSlot = slot<UtteranceProgressListener>()
         every { tts.setLanguage(Locale.KOREAN) } returns TextToSpeech.SUCCESS
         every { tts.setOnUtteranceProgressListener(capture(utteranceProgressListenerSlot)) } answers {
-            utteranceProgressListenerSlot.captured.onError("timeAnnouncement")
+            utteranceProgressListenerSlot.captured.onError("timeAnnouncement", -1)
+            Unit
         }
         
         // When
