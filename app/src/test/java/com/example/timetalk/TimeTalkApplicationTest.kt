@@ -48,7 +48,7 @@ class TimeTalkApplicationTest {
     @Test
     fun `test WorkManager configuration`() {
         // When
-        val config = application.getWorkManagerConfiguration()
+        val config = application.workManagerConfiguration
         
         // Then
         assertNotNull(config)
@@ -71,7 +71,7 @@ class TimeTalkApplicationTest {
         with(channelSlot.captured) {
             assertEquals("time_announcement", id)
             assertEquals("Time Announcement", name)
-            assertEquals(NotificationManager.IMPORTANCE_LOW, importance)
+            assertEquals(NotificationManager.IMPORTANCE_HIGH, importance)
             assertEquals("Channel for time announcement notifications", description)
         }
     }
