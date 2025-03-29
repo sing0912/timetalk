@@ -7,6 +7,7 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.WorkManager
 import io.mockk.*
+import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -26,13 +27,23 @@ class MainActivityUnitTest {
     
     @Before
     fun setup() {
-        tts = mockk(relaxed = true)
+        // WorkManager 모킹
         workManager = mockk(relaxed = true)
-        
         mockkStatic(WorkManager::class)
         every { WorkManager.getInstance(any()) } returns workManager
         
-        activityScenario = ActivityScenario.launch(MainActivity::class.java)
+        // 실제 테스트에서 activityScenario를 초기화
+    }
+    
+    @After
+    fun tearDown() {
+        // ActivityScenario 닫기
+        if (::activityScenario.isInitialized) {
+            activityScenario.close()
+        }
+        
+        // 모든 모킹 해제
+        unmockkAll()
     }
     
     @Test
@@ -40,12 +51,28 @@ class MainActivityUnitTest {
         // Given
         val ttsCallback = slot<TextToSpeech.OnInitListener>()
         
+        // 실제 TextToSpeech 생성을 모킹하고 OnInitListener 캡처
+        mockkConstructor(TextToSpeech::class)
+        every { 
+            anyConstructed<TextToSpeech>().setLanguage(Locale.KOREAN) 
+        } returns TextToSpeech.SUCCESS
+        
+        every {
+            constructedWith<TextToSpeech>(match { it: Array<Any> -> it.size == 2 && it[1] is TextToSpeech.OnInitListener })
+        } answers {
+            // 생성자의 두 번째 인자(OnInitListener)를 캡처
+            val listener = secondArg<TextToSpeech.OnInitListener>()
+            ttsCallback.captured = listener
+            mockk()
+        }
+        
+        activityScenario = ActivityScenario.launch(MainActivity::class.java)
+        
         activityScenario.onActivity { activity ->
-            // When
-            every { tts.setLanguage(Locale.KOREAN) } returns TextToSpeech.SUCCESS
+            // When: OnInit 콜백 호출
             ttsCallback.captured.onInit(TextToSpeech.SUCCESS)
             
-            // Then
+            // Then: TTS 준비 상태 확인
             assertTrue(activity.isTtsReady)
         }
     }
@@ -55,17 +82,33 @@ class MainActivityUnitTest {
         // Given
         val ttsCallback = slot<TextToSpeech.OnInitListener>()
         
+        // 실제 TextToSpeech 생성을 모킹하고 OnInitListener 캡처
+        mockkConstructor(TextToSpeech::class)
+        every {
+            constructedWith<TextToSpeech>(match { it: Array<Any> -> it.size == 2 && it[1] is TextToSpeech.OnInitListener })
+        } answers {
+            // 생성자의 두 번째 인자(OnInitListener)를 캡처
+            val listener = secondArg<TextToSpeech.OnInitListener>()
+            ttsCallback.captured = listener
+            mockk()
+        }
+        
+        activityScenario = ActivityScenario.launch(MainActivity::class.java)
+        
         activityScenario.onActivity { activity ->
-            // When
+            // When: OnInit 콜백 호출 (오류 상태)
             ttsCallback.captured.onInit(TextToSpeech.ERROR)
             
-            // Then
+            // Then: TTS 준비 상태 확인
             assertFalse(activity.isTtsReady)
         }
     }
     
     @Test
     fun `test permission check and request`() {
+        // ActivityScenario 초기화
+        activityScenario = ActivityScenario.launch(MainActivity::class.java)
+        
         activityScenario.onActivity { activity ->
             // Given
             val shadowActivity = shadowOf(activity)
@@ -85,6 +128,9 @@ class MainActivityUnitTest {
     
     @Test
     fun `test start time announcement`() {
+        // ActivityScenario 초기화
+        activityScenario = ActivityScenario.launch(MainActivity::class.java)
+        
         activityScenario.onActivity { activity ->
             // Given
             activity.isTtsReady = true
@@ -105,6 +151,9 @@ class MainActivityUnitTest {
     
     @Test
     fun `test stop time announcement`() {
+        // ActivityScenario 초기화
+        activityScenario = ActivityScenario.launch(MainActivity::class.java)
+        
         activityScenario.onActivity { activity ->
             // When
             activity.stopTimeAnnouncement()
