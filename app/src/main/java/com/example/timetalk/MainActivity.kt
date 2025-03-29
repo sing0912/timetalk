@@ -1,5 +1,8 @@
 package com.example.timetalk
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
 import android.speech.tts.TextToSpeech
@@ -8,6 +11,8 @@ import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import java.util.*
 
 class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
@@ -18,6 +23,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private var wakeLock: PowerManager.WakeLock? = null
     
     private val TAG = "MainActivity"
+    private val PERMISSION_REQUEST_CODE = 123
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -30,6 +36,9 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         // TTS 초기화
         tts = TextToSpeech(this, this)
         
+        // 권한 체크
+        checkPermissions()
+        
         // 버튼 클릭 이벤트 설정
         announceTimeButton.setOnClickListener {
             if (isTtsReady) {
@@ -40,6 +49,42 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }
         
         updateStatus("TTS 초기화 중...")
+    }
+
+    // 앱에 필요한 권한을 확인하고 요청하는 메서드
+    internal fun checkPermissions() {
+        val permissionsToRequest = mutableListOf<String>()
+        
+        // 알림 권한 (Android 13+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) 
+                != PackageManager.PERMISSION_GRANTED) {
+                permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+        
+        // 포그라운드 서비스 권한 (Android 9+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.FOREGROUND_SERVICE) 
+                != PackageManager.PERMISSION_GRANTED) {
+                permissionsToRequest.add(Manifest.permission.FOREGROUND_SERVICE)
+            }
+        }
+        
+        // 웨이크락 권한
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.WAKE_LOCK) 
+            != PackageManager.PERMISSION_GRANTED) {
+            permissionsToRequest.add(Manifest.permission.WAKE_LOCK)
+        }
+        
+        // 필요한 권한 요청
+        if (permissionsToRequest.isNotEmpty()) {
+            ActivityCompat.requestPermissions(
+                this, 
+                permissionsToRequest.toTypedArray(),
+                PERMISSION_REQUEST_CODE
+            )
+        }
     }
 
     private fun announceCurrentTime() {
@@ -89,5 +134,17 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             it.shutdown()
         }
         super.onDestroy()
+    }
+    
+    // 주기적인 시간 알림 시작
+    internal fun startTimeAnnouncement() {
+        Log.d(TAG, "주기적 시간 알림 시작")
+        // WorkManager를 사용한 주기적 작업 등록 로직은 나중에 구현
+    }
+    
+    // 주기적인 시간 알림 중지
+    internal fun stopTimeAnnouncement() {
+        Log.d(TAG, "주기적 시간 알림 중지")
+        // WorkManager 작업 취소 로직은 나중에 구현
     }
 } 
