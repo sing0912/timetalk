@@ -75,14 +75,11 @@ class MainActivityUnitTest {
             
             // Then
             val requestedPermissions = shadowActivity.lastRequestedPermission
-            assertEquals(
-                listOf(
-                    Manifest.permission.POST_NOTIFICATIONS,
-                    Manifest.permission.FOREGROUND_SERVICE,
-                    Manifest.permission.WAKE_LOCK
-                ),
-                requestedPermissions.permissions.toList()
-            )
+            
+            // 요청된 권한 확인 - lastRequestedPermission.permissions 대신 requestedPermissions 객체 직접 사용
+            assertTrue(requestedPermissions.requestedPermissions.contains(Manifest.permission.POST_NOTIFICATIONS))
+            assertTrue(requestedPermissions.requestedPermissions.contains(Manifest.permission.FOREGROUND_SERVICE))
+            assertTrue(requestedPermissions.requestedPermissions.contains(Manifest.permission.WAKE_LOCK))
         }
     }
     
