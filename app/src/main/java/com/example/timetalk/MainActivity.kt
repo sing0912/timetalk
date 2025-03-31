@@ -14,6 +14,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import java.util.*
+import androidx.work.WorkManager
 
 class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private lateinit var announceTimeButton: Button
@@ -139,12 +140,31 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     // 주기적인 시간 알림 시작
     internal fun startTimeAnnouncement() {
         Log.d(TAG, "주기적 시간 알림 시작")
-        // WorkManager를 사용한 주기적 작업 등록 로직은 나중에 구현
+        // WorkManager를 사용한 주기적 작업 등록
+        if (isTtsReady) {
+            val workManager = WorkManager.getInstance(applicationContext)
+            val workRequest = androidx.work.PeriodicWorkRequestBuilder<TimeAnnouncementWorker>(
+                15, // 15분마다 실행 (테스트용으로 짧게 설정)
+                java.util.concurrent.TimeUnit.MINUTES
+            ).build()
+            
+            workManager.enqueueUniquePeriodicWork(
+                "time_announcement",
+                androidx.work.ExistingPeriodicWorkPolicy.UPDATE,
+                workRequest
+            )
+            
+            Toast.makeText(this, "시간 알림이 시작되었습니다.", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(this, "TTS가 준비되지 않았습니다.", Toast.LENGTH_SHORT).show()
+        }
     }
     
     // 주기적인 시간 알림 중지
     internal fun stopTimeAnnouncement() {
         Log.d(TAG, "주기적 시간 알림 중지")
-        // WorkManager 작업 취소 로직은 나중에 구현
+        // WorkManager 작업 취소
+        val workManager = WorkManager.getInstance(applicationContext)
+        workManager.cancelUniqueWork("time_announcement")
     }
 } 

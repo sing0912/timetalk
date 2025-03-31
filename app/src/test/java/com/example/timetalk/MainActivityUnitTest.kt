@@ -22,17 +22,10 @@ import kotlin.test.assertTrue
 @RunWith(RobolectricTestRunner::class)
 class MainActivityUnitTest {
     private lateinit var activityScenario: ActivityScenario<MainActivity>
-    private lateinit var tts: TextToSpeech
-    private lateinit var workManager: WorkManager
     
     @Before
     fun setup() {
-        // WorkManager 모킹
-        workManager = mockk(relaxed = true)
-        mockkStatic(WorkManager::class)
-        every { WorkManager.getInstance(any()) } returns workManager
-        
-        // 실제 테스트에서 activityScenario를 초기화
+        // 각 테스트에서 필요한 초기화 수행
     }
     
     @After
@@ -128,19 +121,23 @@ class MainActivityUnitTest {
     
     @Test
     fun `test start time announcement`() {
+        // Given: 모의 WorkManager 설정
+        val mockWorkManager = mockk<WorkManager>(relaxed = true)
+        every { WorkManager.getInstance(any()) } returns mockWorkManager
+        
         // ActivityScenario 초기화
         activityScenario = ActivityScenario.launch(MainActivity::class.java)
         
         activityScenario.onActivity { activity ->
-            // Given
+            // Given: TTS 준비 상태 설정
             activity.isTtsReady = true
             
-            // When
+            // When: 시간 알림 시작 메서드 호출
             activity.startTimeAnnouncement()
             
-            // Then
+            // Then: WorkManager의 enqueueUniquePeriodicWork 메서드가 호출되었는지 확인
             verify {
-                workManager.enqueueUniquePeriodicWork(
+                mockWorkManager.enqueueUniquePeriodicWork(
                     "time_announcement",
                     any(),
                     any()
@@ -151,16 +148,20 @@ class MainActivityUnitTest {
     
     @Test
     fun `test stop time announcement`() {
+        // Given: 모의 WorkManager 설정
+        val mockWorkManager = mockk<WorkManager>(relaxed = true)
+        every { WorkManager.getInstance(any()) } returns mockWorkManager
+        
         // ActivityScenario 초기화
         activityScenario = ActivityScenario.launch(MainActivity::class.java)
         
         activityScenario.onActivity { activity ->
-            // When
+            // When: 시간 알림 중지 메서드 호출
             activity.stopTimeAnnouncement()
             
-            // Then
+            // Then: WorkManager의 cancelUniqueWork 메서드가 호출되었는지 확인
             verify {
-                workManager.cancelUniqueWork("time_announcement")
+                mockWorkManager.cancelUniqueWork("time_announcement")
             }
         }
     }
