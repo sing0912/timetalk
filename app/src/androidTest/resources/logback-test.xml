@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!-- 콘솔 출력 설정 -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- 기본 로깅 레벨 설정 -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE" />
+    </root>
+
+    <!-- 특정 패키지의 로깅 레벨 설정 -->
+    <logger name="com.example.timetalk" level="DEBUG" />
+    
+    <!-- 테스트 환경에서 사용되는 라이브러리들의 로깅 레벨 조정 -->
+    <logger name="org.mockito" level="WARN" />
+    <logger name="androidx.test" level="WARN" />
+    <logger name="androidx.work" level="WARN" />
+</configuration> 

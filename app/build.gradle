@@ -116,4 +116,12 @@ dependencies {
     androidTestImplementation 'org.mockito:mockito-android:5.3.1'
     androidTestImplementation 'androidx.test:runner:1.5.2'
     androidTestImplementation 'androidx.test:rules:1.5.0'
+    androidTestImplementation 'ch.qos.logback:logback-classic:1.2.11'
+}
+
+// 모든 SLF4J 의존성이 동일한 버전을 사용하도록 강제
+configurations.all {
+    resolutionStrategy {
+        force 'org.slf4j:slf4j-api:1.7.36'
+    }
 } 
