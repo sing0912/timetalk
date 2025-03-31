@@ -121,12 +121,13 @@ class MainActivityUnitTest {
     
     @Test
     fun `test start time announcement`() {
-        // Given: 모의 WorkManager 설정
-        val mockWorkManager = mockk<WorkManager>(relaxed = true)
-        every { WorkManager.getInstance(any()) } returns mockWorkManager
-        
         // ActivityScenario 초기화
         activityScenario = ActivityScenario.launch(MainActivity::class.java)
+        
+        // Mock WorkManager 설정 - 전체 WorkManager 클래스를 모킹
+        val mockWorkManager = mockk<WorkManager>(relaxed = true)
+        mockkStatic(WorkManager::class)
+        every { WorkManager.getInstance(any()) } returns mockWorkManager
         
         activityScenario.onActivity { activity ->
             // Given: TTS 준비 상태 설정
@@ -148,12 +149,13 @@ class MainActivityUnitTest {
     
     @Test
     fun `test stop time announcement`() {
-        // Given: 모의 WorkManager 설정
-        val mockWorkManager = mockk<WorkManager>(relaxed = true)
-        every { WorkManager.getInstance(any()) } returns mockWorkManager
-        
         // ActivityScenario 초기화
         activityScenario = ActivityScenario.launch(MainActivity::class.java)
+        
+        // Mock WorkManager 설정 - 전체 WorkManager 클래스를 모킹
+        val mockWorkManager = mockk<WorkManager>(relaxed = true)
+        mockkStatic(WorkManager::class)
+        every { WorkManager.getInstance(any()) } returns mockWorkManager
         
         activityScenario.onActivity { activity ->
             // When: 시간 알림 중지 메서드 호출
