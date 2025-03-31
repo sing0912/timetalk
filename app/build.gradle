@@ -32,6 +32,9 @@ android {
         unitTests {
             includeAndroidResources = true
             returnDefaultValues = true
+            all {
+                jvmArgs '-XX:+EnableDynamicAgentLoading'
+            }
         }
     }
     
@@ -87,6 +90,10 @@ dependencies {
     implementation 'androidx.work:work-runtime-ktx:2.9.0'
     implementation 'androidx.annotation:annotation:1.7.1'
     
+    // Logging
+    implementation 'org.slf4j:slf4j-api:1.7.36'
+    implementation 'ch.qos.logback:logback-classic:1.2.11'
+    
     // Testing
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.mockito:mockito-core:4.0.0'
@@ -100,6 +107,7 @@ dependencies {
     testImplementation 'androidx.test.ext:junit:1.1.5'
     testImplementation 'org.jetbrains.kotlin:kotlin-test:1.8.10'
     testImplementation 'androidx.work:work-testing:2.9.0'
+    testImplementation 'ch.qos.logback:logback-classic:1.2.11'
     
     // Android Testing
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'
