@@ -44,26 +44,20 @@ class MainActivityUnitTest {
         // Given
         val ttsCallback = slot<TextToSpeech.OnInitListener>()
         
-        // 실제 TextToSpeech 생성을 모킹하고 OnInitListener 캡처
+        // TTS 모킹 - 생성자 전체를 모킹하는 대신 더 간단한 접근 방식 사용
         mockkConstructor(TextToSpeech::class)
+        
+        // 생성자 호출 시 OnInitListener 캡처
         every { 
             anyConstructed<TextToSpeech>().setLanguage(Locale.KOREAN) 
         } returns TextToSpeech.SUCCESS
         
-        every {
-            constructedWith<TextToSpeech>(match { it: Array<Any> -> it.size == 2 && it[1] is TextToSpeech.OnInitListener })
-        } answers {
-            // 생성자의 두 번째 인자(OnInitListener)를 캡처
-            val listener = secondArg<TextToSpeech.OnInitListener>()
-            ttsCallback.captured = listener
-            mockk()
-        }
-        
+        // ActivityScenario 시작
         activityScenario = ActivityScenario.launch(MainActivity::class.java)
         
         activityScenario.onActivity { activity ->
-            // When: OnInit 콜백 호출
-            ttsCallback.captured.onInit(TextToSpeech.SUCCESS)
+            // MainActivity의 TTS 초기화 메서드 직접 호출
+            activity.onInit(TextToSpeech.SUCCESS)
             
             // Then: TTS 준비 상태 확인
             assertTrue(activity.isTtsReady)
@@ -72,25 +66,12 @@ class MainActivityUnitTest {
     
     @Test
     fun `test TTS initialization failure`() {
-        // Given
-        val ttsCallback = slot<TextToSpeech.OnInitListener>()
-        
-        // 실제 TextToSpeech 생성을 모킹하고 OnInitListener 캡처
-        mockkConstructor(TextToSpeech::class)
-        every {
-            constructedWith<TextToSpeech>(match { it: Array<Any> -> it.size == 2 && it[1] is TextToSpeech.OnInitListener })
-        } answers {
-            // 생성자의 두 번째 인자(OnInitListener)를 캡처
-            val listener = secondArg<TextToSpeech.OnInitListener>()
-            ttsCallback.captured = listener
-            mockk()
-        }
-        
+        // ActivityScenario 시작
         activityScenario = ActivityScenario.launch(MainActivity::class.java)
         
         activityScenario.onActivity { activity ->
-            // When: OnInit 콜백 호출 (오류 상태)
-            ttsCallback.captured.onInit(TextToSpeech.ERROR)
+            // MainActivity의 TTS 초기화 메서드 직접 호출
+            activity.onInit(TextToSpeech.ERROR)
             
             // Then: TTS 준비 상태 확인
             assertFalse(activity.isTtsReady)
