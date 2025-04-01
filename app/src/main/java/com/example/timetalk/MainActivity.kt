@@ -120,7 +120,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             } else {
                 isTtsReady = true
                 Log.d(TAG, "TTS 초기화 성공")
-                updateStatus("준비 완료")
+                updateStatus("TTS가 준비되었습니다.")
             }
         } else {
             Log.e(TAG, "TTS 초기화 실패")
