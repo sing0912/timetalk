@@ -7,6 +7,8 @@ import android.widget.TextView
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.core.app.ActivityScenario
+import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -19,7 +21,7 @@ import org.junit.Assert.*
 @Config(sdk = [33], manifest = Config.NONE)
 class MainActivityTest {
     private lateinit var context: Context
-    private lateinit var activity: MainActivity
+    private lateinit var scenario: ActivityScenario<MainActivity>
     private lateinit var startButton: Button
     private lateinit var statusTextView: TextView
     
@@ -29,11 +31,16 @@ class MainActivityTest {
     @Before
     fun setup() {
         context = ApplicationProvider.getApplicationContext()
-        activity = MainActivity()
-        activity.onCreate(null)
-        
-        startButton = activity.findViewById(R.id.startButton)
-        statusTextView = activity.findViewById(R.id.statusTextView)
+        scenario = ActivityScenario.launch(MainActivity::class.java)
+        scenario.onActivity { activity ->
+            startButton = activity.findViewById(R.id.startButton)
+            statusTextView = activity.findViewById(R.id.statusTextView)
+        }
+    }
+    
+    @After
+    fun tearDown() {
+        scenario.close()
     }
     
     @Test
@@ -46,21 +53,25 @@ class MainActivityTest {
     
     @Test
     fun testTimeAnnouncementButton() {
-        startButton.performClick()
-        assertEquals("TTS가 준비되지 않았습니다.", statusTextView.text)
+        scenario.onActivity { activity ->
+            startButton.performClick()
+            assertEquals("TTS가 준비되지 않았습니다.", statusTextView.text)
+        }
     }
     
     @Test
     fun testTTSInitializationStates() {
-        // Test initial state
-        assertEquals("TTS 초기화 중...", statusTextView.text)
-        
-        // Test successful initialization
-        activity.onInit(TextToSpeech.SUCCESS)
-        assertEquals("TTS가 준비되었습니다.", statusTextView.text)
-        
-        // Test failed initialization
-        activity.onInit(TextToSpeech.ERROR)
-        assertEquals("TTS 초기화 실패", statusTextView.text)
+        scenario.onActivity { activity ->
+            // Test initial state
+            assertEquals("TTS 초기화 중...", statusTextView.text)
+            
+            // Test successful initialization
+            activity.onInit(TextToSpeech.SUCCESS)
+            assertEquals("TTS가 준비되었습니다.", statusTextView.text)
+            
+            // Test failed initialization
+            activity.onInit(TextToSpeech.ERROR)
+            assertEquals("TTS 초기화 실패", statusTextView.text)
+        }
     }
 } 
