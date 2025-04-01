@@ -111,21 +111,23 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
 
     override fun onInit(status: Int) {
-        if (status == TextToSpeech.SUCCESS) {
-            val result = tts?.setLanguage(Locale.KOREAN)
-            if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-                Log.e(TAG, "한국어가 지원되지 않습니다")
-                Toast.makeText(this, "한국어가 지원되지 않습니다.", Toast.LENGTH_SHORT).show()
-                updateStatus("오류: 한국어 지원되지 않음")
+        runOnUiThread {
+            if (status == TextToSpeech.SUCCESS) {
+                val result = tts?.setLanguage(Locale.KOREAN)
+                if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+                    Log.e(TAG, "한국어가 지원되지 않습니다")
+                    Toast.makeText(this, "한국어가 지원되지 않습니다.", Toast.LENGTH_SHORT).show()
+                    updateStatus("오류: 한국어 지원되지 않음")
+                } else {
+                    isTtsReady = true
+                    Log.d(TAG, "TTS 초기화 성공")
+                    updateStatus("준비 완료")
+                }
             } else {
-                isTtsReady = true
-                Log.d(TAG, "TTS 초기화 성공")
-                updateStatus("TTS가 준비되었습니다.")
+                Log.e(TAG, "TTS 초기화 실패")
+                Toast.makeText(this, "TTS 초기화에 실패했습니다.", Toast.LENGTH_SHORT).show()
+                updateStatus("오류: TTS 초기화 실패")
             }
-        } else {
-            Log.e(TAG, "TTS 초기화 실패")
-            Toast.makeText(this, "TTS 초기화에 실패했습니다.", Toast.LENGTH_SHORT).show()
-            updateStatus("오류: TTS 초기화 실패")
         }
     }
 
