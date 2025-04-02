@@ -15,6 +15,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import java.util.*
 import androidx.work.WorkManager
+import android.os.Looper
 
 class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private lateinit var announceTimeButton: Button
@@ -106,12 +107,14 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
 
     fun updateStatus(status: String) {
-        statusTextView.text = status
-        Log.d(TAG, "상태 업데이트: $status")
+        post {
+            statusTextView.text = status
+            Log.d(TAG, "상태 업데이트: $status")
+        }
     }
 
     override fun onInit(status: Int) {
-        runOnUiThread {
+        post {
             if (status == TextToSpeech.SUCCESS) {
                 val result = tts?.setLanguage(Locale.KOREAN)
                 if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
@@ -168,5 +171,14 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         // WorkManager 작업 취소
         val workManager = WorkManager.getInstance(applicationContext)
         workManager.cancelUniqueWork("time_announcement")
+    }
+
+    // View의 post 메서드를 사용하여 메인 스레드에서 실행
+    private fun post(action: () -> Unit) {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            action()
+        } else {
+            runOnUiThread(action)
+        }
     }
 } 
