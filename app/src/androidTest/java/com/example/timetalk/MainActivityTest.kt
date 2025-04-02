@@ -2,6 +2,7 @@ package com.example.timetalk
 
 import android.speech.tts.TextToSpeech
 import androidx.test.espresso.Espresso.onView
+import androidx.test.espresso.action.ViewActions.click
 import androidx.test.espresso.assertion.ViewAssertions.matches
 import androidx.test.espresso.matcher.ViewMatchers.*
 import androidx.test.ext.junit.rules.ActivityScenarioRule
@@ -59,6 +60,9 @@ class MainActivityTest {
                 // TTS 초기화 실패 상태 설정
                 activity.onInit(TextToSpeech.ERROR)
 
+                // 잠시 대기하여 UI 업데이트 완료 대기
+                Thread.sleep(500)
+
                 // 실패 상태 확인
                 onView(withId(R.id.statusTextView))
                     .check(matches(withText("오류: TTS 초기화 실패")))
@@ -81,6 +85,9 @@ class MainActivityTest {
                 
                 // 버튼 클릭
                 activity.findViewById<android.widget.Button>(R.id.startButton).performClick()
+
+                // 잠시 대기하여 UI 업데이트 완료 대기
+                Thread.sleep(500)
 
                 // 상태 텍스트에 "현재 시각:" 포함되어 있는지 확인
                 onView(withId(R.id.statusTextView))
