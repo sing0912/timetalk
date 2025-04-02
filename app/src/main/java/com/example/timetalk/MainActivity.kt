@@ -107,10 +107,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
 
     internal fun updateStatus(status: String) {
-        runOnUiThread {
-            statusTextView.text = status
-            Log.d(TAG, "상태 업데이트: $status")
-        }
+        statusTextView.text = status
+        Log.d(TAG, "상태 업데이트: $status")
     }
 
     override fun onInit(status: Int) {

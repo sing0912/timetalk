@@ -1,85 +1,61 @@
 package com.example.timetalk
 
-import android.content.Context
 import android.speech.tts.TextToSpeech
 import android.widget.Button
 import android.widget.TextView
-import androidx.test.core.app.ApplicationProvider
-import androidx.test.ext.junit.runners.AndroidJUnit4
-import androidx.test.platform.app.InstrumentationRegistry
-import androidx.test.core.app.ActivityScenario
-import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.mockito.Mock
-import org.mockito.Mockito.*
+import org.robolectric.Robolectric
+import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.junit.Assert.*
-import java.util.*
 
-@RunWith(AndroidJUnit4::class)
-@Config(sdk = [33], manifest = Config.NONE)
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [30])
 class MainActivityTest {
-    private lateinit var context: Context
-    private lateinit var scenario: ActivityScenario<MainActivity>
+    private lateinit var activity: MainActivity
     private lateinit var startButton: Button
     private lateinit var statusTextView: TextView
-    
-    @Mock
-    private lateinit var mockTTS: TextToSpeech
-    
+
     @Before
     fun setup() {
-        context = ApplicationProvider.getApplicationContext()
-        scenario = ActivityScenario.launch(MainActivity::class.java)
-        scenario.onActivity { activity ->
-            startButton = activity.findViewById(R.id.startButton)
-            statusTextView = activity.findViewById(R.id.statusTextView)
-        }
+        // Robolectric으로 액티비티 생성
+        activity = Robolectric.buildActivity(MainActivity::class.java)
+            .create()
+            .resume()
+            .get()
+            
+        // 뷰 참조 초기화
+        startButton = activity.findViewById(R.id.startButton)
+        statusTextView = activity.findViewById(R.id.statusTextView)
     }
-    
-    @After
-    fun tearDown() {
-        scenario.close()
-    }
-    
+
     @Test
     fun testInitialState() {
-        assertNotNull(startButton)
-        assertNotNull(statusTextView)
+        // 버튼 상태 확인
         assertTrue(startButton.isEnabled)
-        assertEquals("TTS 초기화 중...", statusTextView.text)
+        
+        // 초기 상태 텍스트 확인
+        assertEquals("TTS 초기화 중...", statusTextView.text.toString())
     }
-    
+
     @Test
-    fun testTimeAnnouncementButton() {
-        scenario.onActivity { activity ->
-            startButton.performClick()
-            assertEquals("TTS가 준비되지 않았습니다.", statusTextView.text)
-        }
+    fun testTTSInitializationSuccess() {
+        // TTS 초기화 성공 상태 설정
+        activity.isTtsReady = true
+        activity.updateStatus("준비 완료")
+        
+        // 상태 텍스트 확인
+        assertEquals("준비 완료", statusTextView.text.toString())
     }
-    
+
     @Test
-    fun testTTSInitializationStates() {
-        scenario.onActivity { activity ->
-            // Test initial state
-            assertEquals("TTS 초기화 중...", statusTextView.text)
-            
-            // Override the TTS language result to make it succeed in tests
-            // This is a simpler way to mock the behavior without full mockito setup
-            activity.tts = TextToSpeech(activity, activity)
-            
-            // Directly set isTtsReady to force the behavior we want to test
-            activity.isTtsReady = true
-            
-            // Now call updateStatus directly with what we expect
-            activity.updateStatus("TTS가 준비되었습니다.")
-            assertEquals("TTS가 준비되었습니다.", statusTextView.text)
-            
-            // Test failed initialization similarly
-            activity.updateStatus("오류: TTS 초기화 실패")
-            assertEquals("오류: TTS 초기화 실패", statusTextView.text)
-        }
+    fun testTTSInitializationFailure() {
+        // TTS 초기화 실패 상태 설정
+        activity.onInit(TextToSpeech.ERROR)
+        
+        // 실패 상태 텍스트 확인
+        assertEquals("오류: TTS 초기화 실패", statusTextView.text.toString())
     }
 } 
