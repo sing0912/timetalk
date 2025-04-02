@@ -116,17 +116,17 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             if (status == TextToSpeech.SUCCESS) {
                 val result = tts?.setLanguage(Locale.KOREAN)
                 if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-                    Log.e(TAG, "한국어가 지원되지 않습니다")
+                    Log.e(TAG, "한국어가 지원되지 않습니다: ${result}")
                     Toast.makeText(this, "한국어가 지원되지 않습니다.", Toast.LENGTH_SHORT).show()
                     updateStatus("오류: 한국어 지원되지 않음")
                     isTtsReady = false
                 } else {
                     isTtsReady = true
-                    Log.d(TAG, "TTS 초기화 성공")
-                    updateStatus("준비 완료")
+                    Log.d(TAG, "TTS 초기화 성공: ${result}")
+                    updateStatus("TTS가 준비되었습니다.")  // 테스트 케이스와 일치하도록 수정
                 }
             } else {
-                Log.e(TAG, "TTS 초기화 실패")
+                Log.e(TAG, "TTS 초기화 실패: ${status}")
                 Toast.makeText(this, "TTS 초기화에 실패했습니다.", Toast.LENGTH_SHORT).show()
                 updateStatus("오류: TTS 초기화 실패")
                 isTtsReady = false
