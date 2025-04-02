@@ -1,5 +1,7 @@
 package com.example.timetalk
 
+import android.os.Handler
+import android.os.Looper
 import android.speech.tts.TextToSpeech
 import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ActivityScenario
@@ -21,6 +23,7 @@ import java.util.concurrent.TimeUnit
 class MainActivityTest {
     private lateinit var scenario: ActivityScenario<MainActivity>
     private val latch = CountDownLatch(1)
+    private val handler = Handler(Looper.getMainLooper())
 
     @Before
     fun setup() {
@@ -50,18 +53,25 @@ class MainActivityTest {
 
     @Test
     fun testTTSInitializationSuccess() {
-        scenario.onActivity { activity ->
-            // TTS 초기화 성공 상태로 설정
-            activity.runOnUiThread {
-                activity.isTtsReady = true
-                activity.updateStatus("준비 완료")
-            }
+        var activity: MainActivity? = null
+        
+        scenario.onActivity { 
+            activity = it 
         }
-
-        // 상태가 업데이트될 때까지 잠시 대기
-        Thread.sleep(1000)
-
-        // 상태 텍스트가 업데이트되었는지 확인
+        
+        activity?.let { mainActivity ->
+            mainActivity.runOnUiThread {
+                mainActivity.isTtsReady = true
+                mainActivity.updateStatus("준비 완료")
+            }
+            
+            handler.postDelayed({
+                latch.countDown()
+            }, 1000)
+        }
+        
+        latch.await(2, TimeUnit.SECONDS)
+        
         onView(withId(R.id.statusTextView))
             .check(matches(withText("준비 완료")))
     }
@@ -87,12 +97,12 @@ class MainActivityTest {
                 
                 // 실패 상태 설정
                 mainActivity.onInit(TextToSpeech.ERROR)
-                
-                // 상태가 업데이트될 때까지 대기하도록 지연
-                mainActivity.postDelayed({
-                    latch.countDown()
-                }, 1000)
             }
+            
+            // 상태가 업데이트될 때까지 대기하도록 지연
+            handler.postDelayed({
+                latch.countDown()
+            }, 1000)
         }
         
         // 상태 업데이트 대기
