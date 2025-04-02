@@ -121,6 +121,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                     Log.e(TAG, "한국어가 지원되지 않습니다")
                     Toast.makeText(this, "한국어가 지원되지 않습니다.", Toast.LENGTH_SHORT).show()
                     updateStatus("오류: 한국어 지원되지 않음")
+                    isTtsReady = false
                 } else {
                     isTtsReady = true
                     Log.d(TAG, "TTS 초기화 성공")
@@ -130,6 +131,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 Log.e(TAG, "TTS 초기화 실패")
                 Toast.makeText(this, "TTS 초기화에 실패했습니다.", Toast.LENGTH_SHORT).show()
                 updateStatus("오류: TTS 초기화 실패")
+                isTtsReady = false
             }
         }
     }
