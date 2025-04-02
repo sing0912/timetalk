@@ -1,7 +1,7 @@
 package com.example.timetalk
 
 import android.speech.tts.TextToSpeech
-import androidx.test.core.app.launchActivity
+import androidx.test.core.app.ActivityScenario
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.assertion.ViewAssertions.matches
 import androidx.test.espresso.matcher.ViewMatchers.*
@@ -37,8 +37,8 @@ class MainActivityTest {
 
     @Test
     fun testTTSInitializationStates() {
-        // launchActivity를 사용하여 새로운 액티비티 시작
-        val scenario = launchActivity<MainActivity>()
+        // ActivityScenario를 사용하여 새로운 액티비티 시작
+        val scenario = ActivityScenario.launch(MainActivity::class.java)
         
         // 초기 상태 확인
         onView(withId(R.id.statusTextView))
@@ -63,8 +63,8 @@ class MainActivityTest {
 
     @Test
     fun testTimeAnnouncementButton() {
-        // launchActivity를 사용하여 새로운 액티비티 시작
-        val scenario = launchActivity<MainActivity>()
+        // ActivityScenario를 사용하여 새로운 액티비티 시작
+        val scenario = ActivityScenario.launch(MainActivity::class.java)
 
         // 초기 상태에서 버튼 상태 확인
         onView(withId(R.id.startButton))
