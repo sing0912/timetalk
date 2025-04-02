@@ -107,12 +107,14 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
 
     internal fun updateStatus(status: String) {
-        statusTextView.text = status
-        Log.d(TAG, "상태 업데이트: $status")
+        runOnUiThread {
+            statusTextView.text = status
+            Log.d(TAG, "상태 업데이트: $status")
+        }
     }
 
     override fun onInit(status: Int) {
-        post {
+        runOnUiThread {
             if (status == TextToSpeech.SUCCESS) {
                 val result = tts?.setLanguage(Locale.KOREAN)
                 if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {

@@ -38,6 +38,8 @@ android {
                 systemProperty 'robolectric.dependency.repo.id', 'mavenCentral'
             }
         }
+        animationsDisabled = true
+        execution 'ANDROIDX_TEST_ORCHESTRATOR'
     }
     
     compileOptions {
@@ -124,6 +126,13 @@ dependencies {
     androidTestImplementation 'ch.qos.logback:logback-classic:1.2.11'
     androidTestImplementation 'androidx.test:core:1.5.0'
     androidTestImplementation 'androidx.test.espresso:espresso-intents:3.5.1'
+    androidTestImplementation 'androidx.test:core-ktx:1.5.0'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+    androidTestImplementation 'androidx.test:runner:1.5.2'
+    androidTestImplementation 'androidx.test:rules:1.5.0'
+    androidTestImplementation 'androidx.test.ext:junit-ktx:1.1.5'
+    
+    androidTestUtil 'androidx.test:orchestrator:1.4.2'
 }
 
 // 모든 SLF4J 의존성이 동일한 버전을 사용하도록 강제
