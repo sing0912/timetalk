@@ -31,14 +31,7 @@ android {
     testOptions {
         unitTests {
             includeAndroidResources = true
-            returnDefaultValues = true
-            all {
-                jvmArgs '-XX:+EnableDynamicAgentLoading'
-                systemProperty 'robolectric.dependency.repo.url', 'https://repo1.maven.org/maven2'
-                systemProperty 'robolectric.dependency.repo.id', 'mavenCentral'
-            }
         }
-        animationsDisabled = true
         execution 'ANDROIDX_TEST_ORCHESTRATOR'
     }
     
