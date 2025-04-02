@@ -1,12 +1,12 @@
 package com.example.timetalk
 
 import android.speech.tts.TextToSpeech
-import androidx.test.core.app.ActivityScenario
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.assertion.ViewAssertions.matches
 import androidx.test.espresso.matcher.ViewMatchers.*
 import androidx.test.ext.junit.rules.ActivityScenarioRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import org.hamcrest.Matchers.anyOf
 import org.junit.Rule
 import org.junit.Test
@@ -20,67 +20,71 @@ class MainActivityTest {
 
     @Test
     fun testInitialState() {
-        // 초기 상태 확인
-        onView(withId(R.id.startButton))
-            .check(matches(isDisplayed()))
-            .check(matches(isEnabled()))
+        // 액티비티가 시작되면 버튼과 상태 텍스트뷰가 표시되어야 함
+        activityRule.scenario.onActivity { activity ->
+            // 메인 스레드에서 실행
+            InstrumentationRegistry.getInstrumentation().runOnMainSync {
+                // 버튼 상태 확인
+                onView(withId(R.id.startButton))
+                    .check(matches(isDisplayed()))
+                    .check(matches(isEnabled()))
 
-        onView(withId(R.id.statusTextView))
-            .check(matches(isDisplayed()))
-            .check(matches(anyOf(
-                withText("TTS 초기화 중..."),
-                withText("준비 완료"),
-                withText("오류: 한국어 지원되지 않음"),
-                withText("오류: TTS 초기화 실패")
-            )))
+                // 상태 텍스트 확인
+                onView(withId(R.id.statusTextView))
+                    .check(matches(isDisplayed()))
+                    .check(matches(anyOf(
+                        withText("TTS 초기화 중..."),
+                        withText("준비 완료"),
+                        withText("오류: 한국어 지원되지 않음"),
+                        withText("오류: TTS 초기화 실패")
+                    )))
+            }
+        }
     }
 
     @Test
     fun testTTSInitializationStates() {
-        // ActivityScenario를 사용하여 새로운 액티비티 시작
-        val scenario = ActivityScenario.launch(MainActivity::class.java)
-        
-        // 초기 상태 확인
-        onView(withId(R.id.statusTextView))
-            .check(matches(anyOf(
-                withText("TTS 초기화 중..."),
-                withText("준비 완료"),
-                withText("오류: 한국어 지원되지 않음")
-            )))
+        activityRule.scenario.onActivity { activity ->
+            // 메인 스레드에서 실행
+            InstrumentationRegistry.getInstrumentation().runOnMainSync {
+                // 초기 상태 확인
+                onView(withId(R.id.statusTextView))
+                    .check(matches(anyOf(
+                        withText("TTS 초기화 중..."),
+                        withText("준비 완료"),
+                        withText("오류: 한국어 지원되지 않음")
+                    )))
 
-        // TTS 초기화 실패 상태 설정
-        scenario.onActivity { activity ->
-            // UI 스레드에서 상태 업데이트 실행
-            activity.runOnUiThread {
+                // TTS 초기화 실패 상태 설정
                 activity.onInit(TextToSpeech.ERROR)
+
+                // 실패 상태 확인
+                onView(withId(R.id.statusTextView))
+                    .check(matches(withText("오류: TTS 초기화 실패")))
             }
         }
-
-        // 실패 상태 확인
-        onView(withId(R.id.statusTextView))
-            .check(matches(withText("오류: TTS 초기화 실패")))
     }
 
     @Test
     fun testTimeAnnouncementButton() {
-        // ActivityScenario를 사용하여 새로운 액티비티 시작
-        val scenario = ActivityScenario.launch(MainActivity::class.java)
+        activityRule.scenario.onActivity { activity ->
+            // 메인 스레드에서 실행
+            InstrumentationRegistry.getInstrumentation().runOnMainSync {
+                // 초기 상태에서 버튼 상태 확인
+                onView(withId(R.id.startButton))
+                    .check(matches(isDisplayed()))
+                    .check(matches(isEnabled()))
 
-        // 초기 상태에서 버튼 상태 확인
-        onView(withId(R.id.startButton))
-            .check(matches(isDisplayed()))
-            .check(matches(isEnabled()))
-
-        // TTS 초기화 상태 설정 및 버튼 클릭
-        scenario.onActivity { activity ->
-            activity.runOnUiThread {
+                // TTS 준비 상태로 설정
                 activity.isTtsReady = true
+                
+                // 버튼 클릭
                 activity.findViewById<android.widget.Button>(R.id.startButton).performClick()
+
+                // 상태 텍스트에 "현재 시각:" 포함되어 있는지 확인
+                onView(withId(R.id.statusTextView))
+                    .check(matches(withText(containsString("현재 시각:"))))
             }
         }
-
-        // 상태 텍스트에 "현재 시각:" 포함되어 있는지 확인
-        onView(withId(R.id.statusTextView))
-            .check(matches(withSubstring("현재 시각:")))
     }
 } 
