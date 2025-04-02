@@ -174,7 +174,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
 
     // View의 post 메서드를 사용하여 메인 스레드에서 실행
-    private fun post(action: () -> Unit) {
+    fun post(action: () -> Unit) {
         if (Looper.myLooper() == Looper.getMainLooper()) {
             action()
         } else {
