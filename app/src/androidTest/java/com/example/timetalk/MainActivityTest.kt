@@ -1,115 +1,70 @@
 package com.example.timetalk
 
-import android.os.Handler
-import android.os.Looper
 import android.speech.tts.TextToSpeech
-import androidx.lifecycle.Lifecycle
-import androidx.test.core.app.ActivityScenario
+import androidx.test.core.app.launchActivity
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.assertion.ViewAssertions.matches
 import androidx.test.espresso.matcher.ViewMatchers.*
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.hamcrest.Matchers.anyOf
-import org.junit.After
-import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
-import androidx.test.espresso.IdlingRegistry
-import androidx.test.espresso.IdlingResource
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
+import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.rule.ActivityTestRule
+import org.junit.Rule
 
 @RunWith(AndroidJUnit4::class)
 class MainActivityTest {
-    private lateinit var scenario: ActivityScenario<MainActivity>
-    private val latch = CountDownLatch(1)
-    private val handler = Handler(Looper.getMainLooper())
 
-    @Before
-    fun setup() {
-        scenario = ActivityScenario.launch(MainActivity::class.java)
-        scenario.moveToState(Lifecycle.State.RESUMED)
-    }
-
-    @After
-    fun cleanup() {
-        scenario.close()
-    }
+    @get:Rule
+    val activityRule = ActivityTestRule(MainActivity::class.java)
 
     @Test
     fun testInitialState() {
-        scenario.onActivity { activity ->
-            // 초기 상태에서 버튼이 보이고 활성화되어 있어야 함
-            onView(withId(R.id.startButton))
-                .check(matches(isDisplayed()))
-                .check(matches(isEnabled()))
+        // 초기 상태에서 버튼이 보이고 활성화되어 있어야 함
+        onView(withId(R.id.startButton))
+            .check(matches(isDisplayed()))
+            .check(matches(isEnabled()))
 
-            // 초기 상태 텍스트 확인
-            onView(withId(R.id.statusTextView))
-                .check(matches(isDisplayed()))
-                .check(matches(withText("TTS 초기화 중...")))
-        }
-    }
-
-    @Test
-    fun testTTSInitializationSuccess() {
-        var activity: MainActivity? = null
-        
-        scenario.onActivity { 
-            activity = it 
-        }
-        
-        activity?.let { mainActivity ->
-            mainActivity.runOnUiThread {
-                mainActivity.isTtsReady = true
-                mainActivity.updateStatus("준비 완료")
-            }
-            
-            handler.postDelayed({
-                latch.countDown()
-            }, 1000)
-        }
-        
-        latch.await(2, TimeUnit.SECONDS)
-        
+        // 초기 상태 텍스트 확인
         onView(withId(R.id.statusTextView))
-            .check(matches(withText("준비 완료")))
+            .check(matches(isDisplayed()))
+            .check(matches(withText("TTS 초기화 중...")))
     }
 
     @Test
     fun testTTSInitializationFailure() {
-        var activity: MainActivity? = null
-        
-        // 먼저 현재 Activity 인스턴스를 가져옵니다
-        scenario.onActivity { 
-            activity = it 
-        }
-        
-        // TTS 객체를 초기화하고 실패 상태로 설정
-        activity?.let { mainActivity ->
-            mainActivity.runOnUiThread {
-                // 기존 TTS 객체 정리
-                mainActivity.tts?.shutdown()
-                mainActivity.tts = null
-                
-                // 상태 초기화
-                mainActivity.isTtsReady = false
-                
-                // 실패 상태 설정
-                mainActivity.onInit(TextToSpeech.ERROR)
-            }
+        // 메인 스레드에서 TTS 초기화 실패 상태 설정
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            val activity = activityRule.activity
             
-            // 상태가 업데이트될 때까지 대기하도록 지연
-            handler.postDelayed({
-                latch.countDown()
-            }, 1000)
+            // 기존 TTS 객체 정리
+            activity.tts?.shutdown()
+            activity.tts = null
+            
+            // 상태 초기화
+            activity.isTtsReady = false
+            
+            // 실패 상태 설정
+            activity.onInit(TextToSpeech.ERROR)
         }
-        
-        // 상태 업데이트 대기
-        latch.await(2, TimeUnit.SECONDS)
-        
+
         // 실패 상태 텍스트 확인
         onView(withId(R.id.statusTextView))
             .check(matches(withText("오류: TTS 초기화 실패")))
+    }
+
+    @Test
+    fun testTTSInitializationSuccess() {
+        // 메인 스레드에서 TTS 초기화 성공 상태 설정
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            val activity = activityRule.activity
+            activity.isTtsReady = true
+            activity.updateStatus("준비 완료")
+        }
+
+        // 성공 상태 텍스트 확인
+        onView(withId(R.id.statusTextView))
+            .check(matches(withText("준비 완료")))
     }
 } 

@@ -20,8 +20,8 @@ import android.os.Looper
 class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private lateinit var announceTimeButton: Button
     private lateinit var statusTextView: TextView
-    internal var isTtsReady = false
     internal var tts: TextToSpeech? = null
+    internal var isTtsReady = false
     private var wakeLock: PowerManager.WakeLock? = null
     
     private val TAG = "MainActivity"
