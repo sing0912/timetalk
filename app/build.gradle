@@ -24,10 +24,9 @@ android {
         buildConfig true
     }
 
-    // AAPT2 설정 추가
+    // aaptOptions 수정
     aaptOptions {
-        cruncherEnabled false
-        useNewCruncher false
+        cruncherEnabled = false
     }
 
     buildTypes {
