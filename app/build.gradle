@@ -19,6 +19,16 @@ android {
         testInstrumentationRunnerArguments clearPackageData: 'true'
     }
 
+    buildFeatures {
+        aidl true
+        buildConfig true
+    }
+
+    // AAPT2 설정 추가
+    aaptOptions {
+        cruncherEnabled = false
+    }
+
     buildTypes {
         debug {
             testCoverageEnabled true
