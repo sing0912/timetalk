@@ -26,7 +26,8 @@ android {
 
     // AAPT2 설정 추가
     aaptOptions {
-        cruncherEnabled = false
+        cruncherEnabled false
+        useNewCruncher false
     }
 
     buildTypes {
@@ -51,6 +52,14 @@ android {
     }
     kotlinOptions {
         jvmTarget = '1.8'
+    }
+
+    // Gradle 8.x 호환성을 위한 namespace 설정
+    namespace 'com.example.timetalk'
+    
+    // 리소스 병합 설정 추가
+    androidResources {
+        noCompress 'txt', 'json', 'xml'
     }
 }
 
@@ -137,5 +146,13 @@ dependencies {
 configurations.all {
     resolutionStrategy {
         force 'org.slf4j:slf4j-api:1.7.36'
+    }
+}
+
+// 의존성 버전 일관성 강제
+configurations.all {
+    resolutionStrategy {
+        force 'androidx.core:core:1.12.0'
+        force 'androidx.appcompat:appcompat:1.6.1'
     }
 } 
